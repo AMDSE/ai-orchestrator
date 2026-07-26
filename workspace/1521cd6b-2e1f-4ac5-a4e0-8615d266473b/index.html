@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>尊嘟假嘟 - 真/假猫生成器</title>
+<style>
+:root {
+  --cat-face: #FFE4C4;
+  --cat-face-dark: #FFD5AA;
+  --cat-ear-inner: #FFB6C1;
+  --cat-nose: #FF6B8A;
+  --cat-blush: #FFB6C1;
+  --cat-eye: #2D2D2D;
+  --cat-mouth: #4A3728;
+  --bg-gradient-start: #FFF0F5;
+  --bg-gradient-end: #FFE4E1;
+  --text-real: #FF4757;
+  --text-fake: #5352ED;
+  --bilibili-pink: #FB7299;
+  --bilibili-blue: #00A1D6;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--bg-gradient-start), var(--bg-gradient-end));
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* 背景装饰 */
+.bg-decoration {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.bg-decoration .float-item {
+  position: absolute;
+  font-size: 24px;
+  opacity: 0.15;
+  animation: floatUp 8s ease-in-out infinite;
+}
+
+@keyframes floatUp {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-30px) rotate(10deg); }
+}
+
+/* 主容器 */
+.main-container {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+}
+
+/* 标题 */
+.title-area {
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.title-area h1 {
+  font-size: 32px;
+  font-weight: 900;
+  background: linear-gradient(135deg, var(--bilibili-pink), var(--bilibili-blue));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 2px;
+  text-shadow: none;
+}
+
+.title-area .subtitle {
+  font-size: 13px;
+  color: #999;
+  margin-top: 2px;
+  letter-spacing: 1px;
+}
+
+/* 猫咪容器 */
+.cat-wrapper {
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cat-wrapper:active {
+  transform: scale(0.96);
+}
+
+.cat-wrapper.disabled {
+  pointer-events: none;
+}
+
+/* 猫咪本体 */
+.cat {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  animation: catIdle 3s ease-in-out infinite;
+}
+
+@keyframes catIdle {
+  0%, 100% { transform: rotate(-2deg) scale(1); }
+  25% { transform: rotate(1deg) scale(1.01); }
+  50% { transform: rotate(2deg) scale(1); }
+  75% { transform: rotate(-1deg) scale(0.99); }
+}
+
+/* 猫脸 */
+.cat-face {
+  position: absolute;
+  width: 200px;
+  height: 180px;
+  background: var(--cat-face);
+  border-radius: 50% 50% 45% 45%;
+  top: 20px;
+  left: 10px;
+  box-shadow: 
+    inset 0 -8px 20px rgba(0,0,0,0.05),
+    0 8px 30px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+/* 猫脸高光 */
+.cat-face::before {
+  content: '';
+  position: absolute;
+  width: 60px;
+  height: 30px;
+  background: rgba(255,255,255,0.4);
+  border-radius: 50%;
+  top: 15px;
+  left: 30px;
+  transform: rotate(-20deg);
+}
+
+/* 左耳 */
+.cat-ear-left {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 35px solid transparent;
+  border-right: 35px solid transparent;
+  border-bottom: 55px solid var(--cat-face);
+  top: 2px;
+  left: 18px;
+  transform: rotate(-15deg);
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+}
+
+.cat-ear-left::after {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 20px solid transparent;
+  border-right: 20px solid transparent;
+  border-bottom: 35px solid var(--cat-ear-inner);
+  top: 12px;
+  left: -20px;
+}
+
+/* 右耳 */
+.cat-ear-right {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 35px solid transparent;
+  border-right: 35px solid transparent;
+  border-bottom: 55px solid var(--cat-face);
+  top: 2px;
+  right: 18px;
+  transform: rotate(15deg);
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+}
+
+.cat-ear-right::after {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 20px solid transparent;
+  border-right: 20px solid transparent;
+  border-bottom: 35px solid var(--cat-ear-inner);
+  top: 12px;
+  left: -20px;
+}
+
+/* 眼睛容器 */
+.cat-eyes {
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 40px;
+}
+
+.cat-eye {
+  width: 36px;
+  height: 42px;
+  background: var(--cat-eye);
+  border-radius: 50%;
+  position: relative;
+  overflow: hidden;
+  animation: blink 4s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 90%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+
+.cat-eye::before {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: white;
+  border-radius: 50%;
+  top: 8px;
+  left: 6px;
+}
+
+.cat-eye::after {
+  content: '';
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  background: white;
+  border-radius: 50%;
+  bottom: 10px;
+  right: 5px;
+  opacity: 0.7;
+}
+
+/* 鼻子 */
+.cat-nose {
+  position: absolute;
+  width: 18px;
+  height: 14px;
+  background: var(--cat-nose);
+  border-radius: 50% 50% 50% 50%;
+  top: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* 鼻子高光 */
+.cat-nose::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 5px;
+  background: rgba(255,255,255,0.6);
+  border-radius: 50%;
+  top: 2px;
+  left: 3px;
+}
+
+/* 嘴巴区域 */
+.cat-mouth-area {
+  position: absolute;
+  top: 134px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 上嘴唇 */
+.mouth-top {
+  position: absolute;
+  width: 36px;
+  height: 14px;
+  border-bottom: 3px solid var(--cat-mouth);
+  border-radius: 0 0 50% 50%;
+  top: 0;
+  transition: all 0.3s ease;
+}
+
+/* 下嘴唇 */
+.mouth-bottom {
+  position: absolute;
+  width: 30px;
+  height: 0;
+  background: var(--cat-mouth);
+  border-radius: 0 0 50% 50%;
+  bottom: 0;
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.mouth-bottom::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 10px;
+  background: #FF6B8A;
+  border-radius: 50%;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+/* 张嘴状态 - 真 */
+.cat-wrapper.real .mouth-bottom {
+  height: 22px;
+  width: 34px;
+}
+
+.cat-wrapper.real .mouth-bottom::after {
+  opacity: 1;
+}
+
+.cat-wrapper.real .mouth-top {
+  border-bottom-width: 4px;
+  width: 38px;
+}
+
+/* 闭嘴状态 - 假 */
+.cat-wrapper.fake .mouth-top {
+  border-bottom: 2px solid var(--cat-mouth);
+  width: 28px;
+  border-radius: 0 0 30% 30%;
+}
+
+.cat-wrapper.fake .mouth-bottom {
+  height: 0;
+}
+
+/* 腮红 */
+.cat-blush-left {
+  position: absolute;
+  width: 30px;
+  height: 20px;
+  background: var(--cat-blush);
+  border-radius: 50%;
+  top: 115px;
+  left: 20px;
+  opacity: 0.5;
+}
+
+.cat-blush-right {
+  position: absolute;
+  width: 30px;
+  height: 20px;
+  background: var(--cat-blush);
+  border-radius: 50%;
+  top: 115px;
+  right: 20px;
+  opacity: 0.5;
+}
+
+/* 胡须 */
+.whiskers-left, .whiskers-right {
+  position: absolute;
+  top: 125px;
+}
+
+.whiskers-left { left: -5px; }
+.whiskers-right { right: -5px; }
+
+.whisker {
+  width: 45px;
+  height: 2px;
+  background: #8B7355;
+  margin: 6px 0;
+  border-radius: 2px;
+}
+
+.whiskers-left .whisker:nth-child(1) { transform: rotate(-8deg); }
+.whiskers-left .whisker:nth-child(2) { transform: rotate(0deg); }
+.whiskers-left .whisker:nth-child(3) { transform: rotate(8deg); }
+
+.whiskers-right .whisker:nth-child(1) { transform: rotate(8deg); }
+.whiskers-right .whisker:nth-child(2) { transform: rotate(0deg); }
+.whiskers-right .whisker:nth-child(3) { transform: rotate(-8deg); }
+
+/* 动画状态 */
+.cat-wrapper.animating-real .cat {
+  animation: bounceReal 0.8s ease-out;
+}
+
+.cat-wrapper.animating-fake .cat {
+  animation: shakeFake 0.6s ease-out;
+}
+
+@keyframes bounceReal {
+  0% { transform: scale(1) rotate(0deg); }
+  20% { transform: scale(1.1) rotate(-5deg); }
+  40% { transform: scale(0.95) rotate(5deg); }
+  60% { transform: scale(1.05) rotate(-3deg); }
+  80% { transform: scale(0.98) rotate(2deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+@keyframes shakeFake {
+  0% { transform: rotate(0deg); }
+  15% { transform: rotate(-15deg); }
+  30% { transform: rotate(15deg); }
+  45% { transform: rotate(-12deg); }
+  60% { transform: rotate(10deg); }
+  75% { transform: rotate(-6deg); }
+  100% { transform: rotate(0deg); }
+}
+
+/* 结果文字 */
+.result-display {
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.result-text {
+  font-size: 42px;
+  font-weight: 900;
+  letter-spacing: 6px;
+  opacity: 0;
+  transform: scale(0.5) translateY(20px);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.result-text.show {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+
+.result-text.real-text {
+  color: var(--text-real);
+  text-shadow: 0 2px 10px rgba(255, 71, 87, 0.3);
+}
+
+.result-text.fake-text {
+  color: var(--text-fake);
+  text-shadow: 0 2px 10px rgba(83, 82, 237, 0.3);
+}
+
+.result-emoji {
+  font-size: 28px;
+  opacity: 0;
+  transform: scale(0);
+  transition: all 0.3s ease 0.15s;
+}
+
+.result-emoji.show {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* 统计信息 */
+.stats-bar {
+  display: flex;
+  gap: 20px;
+  font-size: 13px;
+  color: #888;
+  background: rgba(255,255,255,0.7);
+  padding: 8px 16px;
+  border-radius: 20px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.stats-bar span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stats-bar .real-count { color: var(--text-real); font-weight: bold; }
+.stats-bar .fake-count { color: var(--text-fake); font-weight: bold; }
+
+/* 提示文字 */
+.hint-text {
+  font-size: 12px;
+  color: #aaa;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* 声波效果 */
+.sound-waves {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.sound-waves.active {
+  opacity: 1;
+}
+
+.wave-ring {
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  border: 3px solid var(--bilibili-pink);
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: waveExpand 0.8s ease-out forwards;
+}
+
+.wave-ring:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.wave-ring:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes waveExpand {
+  0% { width: 180px; height: 180px; opacity: 0.8; border-width: 4px; }
+  100% { width: 350px; height: 350px; opacity: 0; border-width: 1px; }
+}
+
+/* 粒子效果 */
+.particles {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.particle {
+  position: absolute;
+  font-size: 20px;
+  animation: particleBurst 0.7s ease-out forwards;
+  opacity: 0;
+}
+
+@keyframes particleBurst {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+}
+
+/* 模式切换按钮 */
+.mode-toggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 100;
+  background: rgba(255,255,255,0.85);
+  border: 2px solid var(--bilibili-pink);
+  color: var(--bilibili-pink);
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.mode-toggle:hover {
+  background: var(--bilibili-pink);
+  color: white;
+}
+
+.mode-toggle.shake-mode {
+  border-color: var(--bilibili-blue);
+  color: var(--bilibili-blue);
+}
+
+.mode-toggle.shake-mode:hover {
+  background: var(--bilibili-blue);
+  color: white;
+}
+
+/* 连击显示 */
+.combo-display {
+  position: fixed;
+  top: 60px;
+  right: 16px;
+  z-index: 100;
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--bilibili-pink);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.combo-display.show {
+  opacity: 1;
+}
+
+/* 响应式 */
+@media (max-width: 400px) {
+  .cat { width: 180px; height: 180px; }
+  .cat-face { width: 160px; height: 144px; top: 18px; left: 10px; }
+  .cat-ear-left { left: 12px; border-left-width: 28px; border-right-width: 28px; border-bottom-width: 44px; }
+  .cat-ear-right { right: 12px; border-left-width: 28px; border-right-width: 28px; border-bottom-width: 44px; }
+  .cat-eyes { top: 55px; gap: 32px; }
+  .cat-eye { width: 28px; height: 34px; }
+  .cat-nose { top: 96px; }
+  .cat-mouth-area { top: 108px; }
+  .cat-blush-left, .cat-blush-right { top: 92px; }
+  .whiskers-left, .whiskers-right { top: 100px; }
+  .result-text { font-size: 32px; }
+  .title-area h1 { font-size: 26px; }
+}
+</style>
+</head>
+<body>
+
+<!-- 背景装饰 -->
+<div class="bg-decoration" id="bgDecoration"></div>
+
+<!-- 模式切换 -->
+<button class="mode-toggle" id="modeToggle" aria-label="切换交互模式">
+  🖱️ 点击模式
+</button>
+
+<!-- 连击显示 -->
+<div class="combo-display" id="comboDisplay"></div>
+
+<!-- 主容器 -->
+<div class="main-container">
+  <div class="title-area">
+    <h1>尊嘟假嘟</h1>
+    <p class="subtitle">真 / 假 猫 生 成 器</p>
+  </div>
+
+  <!-- 猫咪 -->
+  <div class="cat-wrapper" id="catWrapper" role="button" aria-label="点击猫咪进行判定" tabindex="0">
+    <div class="cat" id="cat">
+      <!-- 声波 -->
+      <div class="sound-waves" id="soundWaves">
+        <div class="wave-ring"></div>
+        <div class="wave-ring"></div>
+        <div class="wave-ring"></div>
+      </div>
+      <!-- 粒子 -->
+      <div class="particles" id="particles"></div>
+      <!-- 耳朵 -->
+      <div class="cat-ear-left"></div>
+      <div class="cat-ear-right"></div>
+      <!-- 猫脸 -->
+      <div class="cat-face">
+        <!-- 腮红 -->
+        <div class="cat-blush-left"></div>
+        <div class="cat-blush-right"></div>
+        <!-- 眼睛 -->
+        <div class="cat-eyes">
+          <div class="cat-eye"></div>
+          <div class="cat-eye"></div>
+        </div>
+        <!-- 鼻子 -->
+        <div class="cat-nose"></div>
+        <!-- 嘴巴 -->
+        <div class="cat-mouth-area">
+          <div class="mouth-top"></div>
+          <div class="mouth-bottom"></div>
+        </div>
+      </div>
+      <!-- 胡须 -->
+      <div class="whiskers-left">
+        <div class="whisker"></div>
+        <div class="whisker"></div>
+        <div class="whisker"></div>
+      </div>
+      <div class="whiskers-right">
+        <div class="whisker"></div>
+        <div class="whisker"></div>
+        <div class="whisker"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 结果显示 -->
+  <div class="result-display">
+    <div class="result-text" id="resultText"></div>
+    <div class="result-emoji" id="resultEmoji"></div>
+  </div>
+
+  <!-- 统计 -->
+  <div class="stats-bar">
+    <span>🐱 总计: <strong id="totalCount">0</strong></span>
+    <span class="real-count">✓ 真: <strong id="realCount">0</strong></span>
+    <span class="fake-count">✗ 假: <strong id="fakeCount">0</strong></span>
+  </div>
+
+  <!-- 提示 -->
+  <p class="hint-text" id="hintText">👆 点击猫咪开始判定</p>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ============ DOM 元素 ============
+  const catWrapper = document.getElementById('catWrapper');
+  const cat = document.getElementById('cat');
+  const resultText = document.getElementById('resultText');
+  const resultEmoji = document.getElementById('resultEmoji');
+  const soundWaves = document.getElementById('soundWaves');
+  const particles = document.getElementById('particles');
+  const totalCountEl = document.getElementById('totalCount');
+  const realCountEl = document.getElementById('realCount');
+  const fakeCountEl = document.getElementById('fakeCount');
+  const hintText = document.getElementById('hintText');
+  const modeToggle = document.getElementById('modeToggle');
+  const comboDisplay = document.getElementById('comboDisplay');
+  const bgDecoration = document.getElementById('bgDecoration');
+
+  // ============ 状态 ============
+  let isAnimating = false;
+  let totalCount = 0;
+  let realCount = 0;
+  let fakeCount = 0;
+  let shakeMode = false;
+  let combo = 0;
+  let lastClickTime = 0;
+  let audioCtx = null;
+  let lastShakeTime = 0;
+  let lastShakeX = 0, lastShakeY = 0, lastShakeZ = 0;
+
+  // ============ 音频系统 ============
+  function getAudioContext() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    return audioCtx;
+  }
+
+  function playRealSound() {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+
+    // 主音 - 上扬音调模拟"尊嘟~"
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(523, now); // C5
+    osc1.frequency.linearRampToValueAtTime(659, now + 0.1); // E5
+    osc1.frequency.linearRampToValueAtTime(784, now + 0.2); // G5
+    gain1.gain.setValueAtTime(0.3, now);
+    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.4);
+
+    // 谐波 - 增加可爱感
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'triangle';
+    osc2.frequency.setValueAtTime(1047, now + 0.05); // C6
+    osc2.frequency.linearRampToValueAtTime(1319, now + 0.15); // E6
+    gain2.gain.setValueAtTime(0.12, now + 0.05);
+    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.05);
+    osc2.stop(now + 0.35);
+
+    // 清脆的叮声
+    const osc3 = ctx.createOscillator();
+    const gain3 = ctx.createGain();
+    osc3.type = 'sine';
+    osc3.frequency.setValueAtTime(1568, now + 0.1); // G6
+    gain3.gain.setValueAtTime(0.15, now + 0.1);
+    gain3.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+    osc3.connect(gain3);
+    gain3.connect(ctx.destination);
+    osc3.start(now + 0.1);
+    osc3.stop(now + 0.5);
+  }
+
+  function playFakeSound() {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+
+    // 主音 - 下降音调模拟"假嘟..."
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(523, now); // C5
+    osc1.frequency.linearRampToValueAtTime(392, now + 0.15); // G4
+    osc1.frequency.linearRampToValueAtTime(262, now + 0.35); // C4
+    gain1.gain.setValueAtTime(0.3, now);
+    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.5);
+
+    // 低沉的辅助音
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'triangle';
+    osc2.frequency.setValueAtTime(330, now + 0.05); // E4
+    osc2.frequency.linearRampToValueAtTime(196, now + 0.3); // G3
+    gain2.gain.setValueAtTime(0.15, now + 0.05);
+    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.05);
+    osc2.stop(now + 0.45);
+
+    // 轻微的颤音效果
+    const osc3 = ctx.createOscillator();
+    const gain3 = ctx.createGain();
+    const lfo = ctx.createOscillator();
+    const lfoGain = ctx.createGain();
+    osc3.type = 'sine';
+    osc3.frequency.setValueAtTime(200, now);
+    lfo.frequency.setValueAtTime(8, now);
+    lfoGain.gain.setValueAtTime(15, now);
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc3.frequency);
+    gain3.gain.setValueAtTime(0.06, now);
+    gain3.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+    osc3.connect(gain3);
+    gain3.connect(ctx.destination);
+    lfo.start(now);
+    osc3.start(now);
+    lfo.stop(now + 0.4);
+    osc3.stop(now + 0.4);
+  }
+
+  // ============ 粒子效果 ============
+  function spawnParticles(isReal) {
+    particles.innerHTML = '';
+    const emojis = isReal 
+      ? ['✨', '💕', '⭐', '🌟', '💖', '🎉', '✨', '💫']
+      : ['💨', '😅', '🤔', '💭', '🌀', '😶', '💨', '🫥'];
+    
+    const count = 8;
+    for (let i = 0; i < count; i++) {
+      const particle = document.createElement('span');
+      particle.className = 'particle';
+      particle.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+      const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+      const distance = 80 + Math.random() * 60;
+      const tx = Math.cos(angle) * distance;
+      const ty = Math.sin(angle) * distance;
+      particle.style.setProperty('--tx', tx + 'px');
+      particle.style.setProperty('--ty', ty + 'px');
+      particle.style.animationDelay = (Math.random() * 0.15) + 's';
+      particles.appendChild(particle);
+    }
+
+    // 清理粒子
+    setTimeout(() => { particles.innerHTML = ''; }, 1000);
+  }
+
+  // ============ 核心判定逻辑 ============
+  function triggerJudgment() {
+    if (isAnimating) return;
+
+    const now = Date.now();
+    
+    // 连击检测
+    if (now - lastClickTime < 1500) {
+      combo++;
+    } else {
+      combo = 1;
+    }
+    lastClickTime = now;
+
+    if (combo >= 3) {
+      comboDisplay.textContent = `🔥 连击 x${combo}`;
+      comboDisplay.classList.add('show');
+      setTimeout(() => comboDisplay.classList.remove('show'), 1200);
+    }
+
+    isAnimating = true;
+    catWrapper.classList.add('disabled');
+
+    // 随机判定
+    const isReal = Math.random() < 0.5;
+
+    // 清除之前的状态
+    catWrapper.classList.remove('real', 'fake', 'animating-real', 'animating-fake');
+    resultText.classList.remove('show', 'real-text', 'fake-text');
+    resultEmoji.classList.remove('show');
+    soundWaves.classList.remove('active');
+
+    // 强制重绘
+    void catWrapper.offsetWidth;
+
+    if (isReal) {
+      // 真 - 尊嘟
+      catWrapper.classList.add('real', 'animating-real');
+      playRealSound();
+      soundWaves.classList.add('active');
+      spawnParticles(true);
+
+      setTimeout(() => {
+        resultText.textContent = '尊嘟！';
+        resultText.className = 'result-text real-text';
+        resultText.classList.add('show');
+        resultEmoji.textContent = '🐱💕';
+        resultEmoji.classList.add('show');
+      }, 300);
+
+      realCount++;
+    } else {
+      // 假 - 假嘟
+      catWrapper.classList.add('fake', 'animating-fake');
+      playFakeSound();
+      spawnParticles(false);
+
+      setTimeout(() => {
+        resultText.textContent = '假嘟！';
+        resultText.className = 'result-text fake-text';
+        resultText.classList.add('show');
+        resultEmoji.textContent = '🐱😶';
+        resultEmoji.classList.add('show');
+      }, 300);
+
+      fakeCount++;
+    }
+
+    totalCount++;
+
+    // 更新统计
+    totalCountEl.textContent = totalCount;
+    realCountEl.textContent = realCount;
+    fakeCountEl.textContent = fakeCount;
+
+    // 动画结束
+    const animDuration = isReal ? 900 : 700;
+    setTimeout(() => {
+      catWrapper.classList.remove('animating-real', 'animating-fake');
+      catWrapper.classList.remove('disabled');
+      isAnimating = false;
+    }, animDuration);
+
+    // 清除声波
+    setTimeout(() => soundWaves.classList.remove('active'), 900);
+  }
+
+  // ============ 事件绑定 ============
+  // 点击/触摸
+  catWrapper.addEventListener('click', triggerJudgment);
+  catWrapper.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      triggerJudgment();
+    }
+  });
+
+  // ============ 重力感应模式 ============
+  function toggleShakeMode() {
+    shakeMode = !shakeMode;
+    if (shakeMode) {
+      modeToggle.textContent = '📱 摇晃模式';
+      modeToggle.classList.add('shake-mode');
+      hintText.textContent = '📱 摇晃手机进行判定';
+      requestShakePermission();
+    } else {
+      modeToggle.textContent = '🖱️ 点击模式';
+      modeToggle.classList.remove('shake-mode');
+      hintText.textContent = '👆 点击猫咪开始判定';
+    }
+  }
+
+  function requestShakePermission() {
+    if (typeof DeviceOrientationEvent !== 'undefined' && 
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      DeviceOrientationEvent.requestPermission()
+        .then(state => {
+          if (state === 'granted') {
+            window.addEventListener('devicemotion', handleShake);
+          }
+        })
+        .catch(() => {
+          // 降级为点击模式
+          shakeMode = false;
+          modeToggle.textContent = '🖱️ 点击模式';
+          modeToggle.classList.remove('shake-mode');
+          hintText.textContent = '👆 点击猫咪开始判定';
+        });
+    } else if (window.DeviceMotionEvent) {
+      window.addEventListener('devicemotion', handleShake);
+    }
+  }
+
+  function handleShake(e) {
+    if (!shakeMode || isAnimating) return;
+    
+    const acc = e.accelerationIncludingGravity || e.acceleration;
+    if (!acc) return;
+
+    const x = acc.x || 0;
+    const y = acc.y || 0;
+    const z = acc.z || 0;
+
+    const deltaX = Math.abs(x - lastShakeX);
+    const deltaY = Math.abs(y - lastShakeY);
+    const deltaZ = Math.abs(z - lastShakeZ);
+
+    lastShakeX = x;
+    lastShakeY = y;
+    lastShakeZ = z;
+
+    const shakeThreshold = 15;
+    const now = Date.now();
+
+    if ((deltaX > shakeThreshold || deltaY > shakeThreshold || deltaZ > shakeThreshold) &&
+        now - lastShakeTime > 800) {
+      lastShakeTime = now;
+      triggerJudgment();
+    }
+  }
+
+  modeToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleShakeMode();
+  });
+
+  // ============ 背景装饰 ============
+  function createBgDecoration() {
+    const items = ['🐱', '💕', '✨', '🌸', '⭐', '🎀', '💫', '🐾'];
+    for (let i = 0; i < 12; i++) {
+      const item = document.createElement('span');
+      item.className = 'float-item';
+      item.textContent = items[Math.floor(Math.random() * items.length)];
+      item.style.left = Math.random() * 100 + '%';
+      item.style.top = Math.random() * 100 + '%';
+      item.style.animationDelay = Math.random() * 5 + 's';
+      item.style.animationDuration = (6 + Math.random() * 4) + 's';
+      item.style.fontSize = (16 + Math.random() * 16) + 'px';
+      bgDecoration.appendChild(item);
+    }
+  }
+  createBgDecoration();
+
+  // ============ 页面可见性处理 ============
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && audioCtx) {
+      audioCtx.suspend();
+    } else if (audioCtx) {
+      audioCtx.resume();
+    }
+  });
+
+  // ============ 初始化提示 ============
+  // 首次点击时初始化音频上下文（满足浏览器自动播放策略）
+  function initAudioOnInteraction() {
+    getAudioContext();
+    document.removeEventListener('click', initAudioOnInteraction);
+    document.removeEventListener('touchstart', initAudioOnInteraction);
+  }
+  document.addEventListener('click', initAudioOnInteraction);
+  document.addEventListener('touchstart', initAudioOnInteraction);
+
+})();
+</script>
+</body>
+</html>

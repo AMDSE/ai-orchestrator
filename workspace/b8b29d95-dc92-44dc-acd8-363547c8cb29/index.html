@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🔥 网络热梗玩具屋</title>
+<style>
+  :root {
+    --bg: #0f0f1a;
+    --card: #1a1a2e;
+    --accent: #ff6b6b;
+    --accent2: #ffd93d;
+    --accent3: #6bcb77;
+    --accent4: #4d96ff;
+    --text: #e8e8f0;
+    --text2: #a0a0c0;
+    --border: #2a2a4a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  /* 背景动效 */
+  .bg-grid {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-image:
+      linear-gradient(rgba(75,100,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(75,100,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none; z-index: 0;
+  }
+  .bg-orb {
+    position: fixed; border-radius: 50%; filter: blur(120px);
+    pointer-events: none; z-index: 0; animation: orbFloat 12s ease-in-out infinite;
+  }
+  .bg-orb:nth-child(1) { width: 400px; height: 400px; background: rgba(255,107,107,0.12); top: -100px; left: -100px; }
+  .bg-orb:nth-child(2) { width: 350px; height: 350px; background: rgba(77,150,255,0.1); bottom: -80px; right: -80px; animation-delay: -6s; }
+  .bg-orb:nth-child(3) { width: 300px; height: 300px; background: rgba(255,217,61,0.08); top: 50%; left: 50%; animation-delay: -3s; }
+  @keyframes orbFloat {
+    0%,100% { transform: translate(0,0); }
+    33% { transform: translate(30px,-20px); }
+    66% { transform: translate(-20px,30px); }
+  }
+
+  /* 头部 */
+  header {
+    position: relative; z-index: 10;
+    text-align: center; padding: 40px 20px 20px;
+  }
+  header h1 {
+    font-size: 2.8em; font-weight: 900;
+    background: linear-gradient(135deg, var(--accent), var(--accent2), var(--accent3));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text; letter-spacing: 2px;
+    text-shadow: none; margin-bottom: 8px;
+  }
+  header p { color: var(--text2); font-size: 1.05em; }
+
+  /* 导航 */
+  nav {
+    position: relative; z-index: 10;
+    display: flex; justify-content: center; gap: 8px;
+    padding: 10px 20px 24px; flex-wrap: wrap;
+  }
+  nav button {
+    padding: 10px 22px; border: 2px solid var(--border);
+    background: var(--card); color: var(--text2);
+    border-radius: 30px; cursor: pointer; font-size: 0.95em;
+    font-weight: 600; transition: all 0.3s;
+  }
+  nav button:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-2px); }
+  nav button.active {
+    background: linear-gradient(135deg, var(--accent), #ee5a24);
+    border-color: transparent; color: #fff;
+    box-shadow: 0 4px 20px rgba(255,107,107,0.35);
+  }
+
+  /* 主容器 */
+  main {
+    position: relative; z-index: 10;
+    max-width: 960px; margin: 0 auto; padding: 0 20px 60px;
+  }
+  .panel { display: none; animation: fadeUp 0.4s ease; }
+  .panel.active { display: block; }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* 卡片通用 */
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 28px; margin-bottom: 20px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+  }
+
+  /* ===== 梗百科生成器 ===== */
+  .meme-card-display {
+    text-align: center; padding: 40px 20px;
+    background: linear-gradient(135deg, rgba(255,107,107,0.08), rgba(77,150,255,0.08));
+    border-radius: 16px; border: 1px dashed var(--border);
+    margin-bottom: 20px; min-height: 220px; display: flex;
+    flex-direction: column; justify-content: center; align-items: center;
+    transition: all 0.4s;
+  }
+  .meme-emoji { font-size: 4em; margin-bottom: 12px; animation: bounce 1s ease infinite; }
+  @keyframes bounce {
+    0%,100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  .meme-title { font-size: 1.8em; font-weight: 800; margin-bottom: 8px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .meme-desc { color: var(--text2); font-size: 1em; max-width: 500px; line-height: 1.6; }
+  .meme-tag {
+    display: inline-block; padding: 4px 12px; border-radius: 20px;
+    background: rgba(77,150,255,0.15); color: var(--accent4);
+    font-size: 0.8em; margin-top: 12px; font-weight: 600;
+  }
+  .btn-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
+  .btn {
+    padding: 12px 28px; border: none; border-radius: 30px;
+    font-size: 1em; font-weight: 700; cursor: pointer;
+    transition: all 0.3s; color: #fff;
+  }
+  .btn-primary { background: linear-gradient(135deg, var(--accent), #ee5a24); box-shadow: 0 4px 16px rgba(255,107,107,0.35); }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(255,107,107,0.5); }
+  .btn-secondary { background: linear-gradient(135deg, var(--accent4), #6c5ce7); box-shadow: 0 4px 16px rgba(77,150,255,0.35); }
+  .btn-secondary:hover { transform: translateY(-2px); }
+  .btn-green { background: linear-gradient(135deg, var(--accent3), #00b894); box-shadow: 0 4px 16px rgba(107,203,119,0.35); }
+  .btn-green:hover { transform: translateY(-2px); }
+
+  /* 收藏列表 */
+  .fav-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap: 12px; }
+  .fav-item {
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; text-align: center;
+    cursor: pointer; transition: all 0.3s;
+  }
+  .fav-item:hover { border-color: var(--accent2); transform: translateY(-3px); }
+  .fav-item .fav-emoji { font-size: 2em; }
+  .fav-item .fav-name { font-weight: 700; font-size: 0.9em; margin-top: 6px; }
+
+  /* ===== 热梗大富翁 ===== */
+  .game-header {
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 12px; margin-bottom: 20px;
+  }
+  .game-stats { display: flex; gap: 16px; flex-wrap: wrap; }
+  .stat {
+    background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+    border-radius: 12px; padding: 10px 18px; text-align: center;
+  }
+  .stat .val { font-size: 1.4em; font-weight: 800; color: var(--accent2); }
+  .stat .lbl { font-size: 0.75em; color: var(--text2); }
+
+  .board {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;
+    margin-bottom: 20px;
+  }
+  .cell {
+    aspect-ratio: 1; border-radius: 10px; display: flex;
+    flex-direction: column; align-items: center; justify-content: center;
+    font-size: 0.7em; font-weight: 700; text-align: center;
+    padding: 4px; position: relative; transition: all 0.3s;
+    border: 1px solid var(--border); background: rgba(255,255,255,0.02);
+  }
+  .cell .cell-emoji { font-size: 1.6em; }
+  .cell .cell-label { font-size: 0.85em; color: var(--text2); margin-top: 2px; }
+  .cell.player-here {
+    border-color: var(--accent) !important;
+    background: rgba(255,107,107,0.12) !important;
+    box-shadow: 0 0 16px rgba(255,107,107,0.3);
+    transform: scale(1.05); z-index: 2;
+  }
+  .cell.player-here::after {
+    content: '🧑'; position: absolute; top: -8px; right: -8px;
+    font-size: 1.4em; animation: bounce 0.6s ease infinite;
+  }
+  .cell-type-event { border-color: rgba(255,107,107,0.3); }
+  .cell-type-reward { border-color: rgba(255,217,61,0.3); }
+  .cell-type-challenge { border-color: rgba(107,203,119,0.3); }
+  .cell-type-meme { border-color: rgba(77,150,255,0.3); }
+
+  .dice-area {
+    display: flex; align-items: center; justify-content: center;
+    gap: 20px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .dice {
+    width: 80px; height: 80px; border-radius: 16px;
+    background: linear-gradient(135deg, #fff, #e0e0e0);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2.5em; color: #333; font-weight: 900;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    transition: transform 0.3s; cursor: pointer;
+  }
+  .dice.rolling { animation: diceRoll 0.6s ease; }
+  @keyframes diceRoll {
+    0% { transform: rotate(0) scale(1); }
+    25% { transform: rotate(90deg) scale(1.2); }
+    50% { transform: rotate(180deg) scale(0.9); }
+    75% { transform: rotate(270deg) scale(1.1); }
+    100% { transform: rotate(360deg) scale(1); }
+  }
+  .log-box {
+    background: rgba(0,0,0,0.3); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; max-height: 200px;
+    overflow-y: auto; font-size: 0.85em; line-height: 1.8;
+  }
+  .log-entry { padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .log-entry .time { color: var(--text2); font-size: 0.8em; margin-right: 8px; }
+  .log-entry.event { color: var(--accent); }
+  .log-entry.reward { color: var(--accent2); }
+  .log-entry.challenge { color: var(--accent3); }
+  .log-entry.meme { color: var(--accent4); }
+
+  /* ===== 梗图制作器 ===== */
+  .maker-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 700px) { .maker-layout { grid-template-columns: 1fr; } }
+  .canvas-wrap {
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
+  #memeCanvas {
+    border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    max-width: 100%; height: auto;
+  }
+  .template-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .tmpl-item {
+    aspect-ratio: 1; border-radius: 10px; cursor: pointer;
+    border: 2px solid transparent; transition: all 0.3s;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2em; background: rgba(255,255,255,0.04);
+  }
+  .tmpl-item:hover { border-color: var(--accent4); transform: scale(1.05); }
+  .tmpl-item.selected { border-color: var(--accent); box-shadow: 0 0 12px rgba(255,107,107,0.4); }
+  .input-group { margin-bottom: 14px; }
+  .input-group label { display: block; font-size: 0.85em; color: var(--text2); margin-bottom: 6px; font-weight: 600; }
+  .input-group input, .input-group select {
+    width: 100%; padding: 10px 14px; border-radius: 10px;
+    border: 1px solid var(--border); background: rgba(255,255,255,0.04);
+    color: var(--text); font-size: 0.95em; outline: none;
+    transition: border-color 0.3s;
+  }
+  .input-group input:focus, .input-group select:focus { border-color: var(--accent4); }
+  .color-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .color-dot {
+    width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+    border: 3px solid transparent; transition: all 0.3s;
+  }
+  .color-dot:hover { transform: scale(1.15); }
+  .color-dot.selected { border-color: #fff; box-shadow: 0 0 8px rgba(255,255,255,0.4); }
+
+  /* 弹窗 */
+  .modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.7); z-index: 100;
+    display: none; align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 20px; padding: 32px; max-width: 420px; width: 90%;
+    text-align: center; animation: modalIn 0.3s ease;
+  }
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(0.9) translateY(20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .modal h3 { font-size: 1.4em; margin-bottom: 12px; }
+  .modal p { color: var(--text2); line-height: 1.6; margin-bottom: 20px; }
+  .modal .modal-emoji { font-size: 3.5em; margin-bottom: 12px; }
+
+  /* 响应式 */
+  @media (max-width: 600px) {
+    header h1 { font-size: 1.8em; }
+    .board { grid-template-columns: repeat(4, 1fr); }
+    .card { padding: 18px; }
+  }
+
+  /* 滚动条 */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* 粒子效果 */
+  .particle {
+    position: fixed; pointer-events: none; z-index: 99;
+    animation: particleFly 1s ease forwards;
+    font-size: 1.5em;
+  }
+  @keyframes particleFly {
+    0% { opacity: 1; transform: translate(0,0) scale(1); }
+    100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0); }
+  }
+
+  .section-title {
+    font-size: 1.3em; font-weight: 800; margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .hint { font-size: 0.8em; color: var(--text2); margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="bg-orb"></div>
+<div class="bg-orb"></div>
+<div class="bg-orb"></div>
+
+<header>
+  <h1>🔥 网络热梗玩具屋</h1>
+  <p>梗百科 · 热梗大富翁 · 梗图制作器 —— 一网打尽互联网名场面</p>
+</header>
+
+<nav>
+  <button class="active" onclick="switchPanel('memeWiki', this)">📚 梗百科生成器</button>
+  <button onclick="switchPanel('monopoly', this)">🎲 热梗大富翁</button>
+  <button onclick="switchPanel('maker', this)">🎨 梗图制作器</button>
+</nav>
+
+<main>
+
+  <!-- ==================== 梗百科生成器 ==================== -->
+  <div id="memeWiki" class="panel active">
+    <div class="card">
+      <div class="meme-card-display" id="memeDisplay">
+        <div class="meme-emoji">🎭</div>
+        <div class="meme-title">点击下方按钮开始探索</div>
+        <div class="meme-desc">每一次点击，都是一段互联网记忆的唤醒</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="generateMeme()">🎲 随机生成梗</button>
+        <button class="btn btn-secondary" onclick="favoriteMeme()">⭐ 收藏这个梗</button>
+        <button class="btn btn-green" onclick="shareMeme()">📋 复制分享</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">⭐ 我的梗收藏夹 <span id="favCount" style="font-size:0.7em;color:var(--text2)">(0)</span></div>
+      <div class="fav-grid" id="favGrid">
+        <p style="color:var(--text2);font-size:0.9em;grid-column:1/-1;text-align:center;padding:20px;">
+          还没有收藏任何梗哦，快去生成并收藏吧！
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 热梗大富翁 ==================== -->
+  <div id="monopoly" class="panel">
+    <div class="card">
+      <div class="game-header">
+        <div class="game-stats">
+          <div class="stat"><div class="val" id="playerPos">0</div><div class="lbl">当前位置</div></div>
+          <div class="stat"><div class="val" id="playerCoins">100</div><div class="lbl">梗币</div></div>
+          <div class="stat"><div class="val" id="playerRound">1</div><div class="lbl">回合</div></div>
+        </div>
+        <button class="btn btn-secondary" onclick="resetGame()" style="padding:8px 18px;font-size:0.85em;">🔄 重新开始</button>
+      </div>
+
+      <div class="board" id="board"></div>
+
+      <div class="dice-area">
+        <div class="dice" id="dice" onclick="rollDice()" title="点击掷骰子">🎲</div>
+        <div>
+          <button class="btn btn-primary" onclick="rollDice()">掷骰子前进！</button>
+          <p class="hint">点击骰子或按钮掷骰，走到格子触发梗事件</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">📜 游戏日志</div>
+      <div class="log-box" id="logBox">
+        <div class="log-entry"><span class="time">系统</span>欢迎来到热梗大富翁！掷骰子开始游戏吧～</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 梗图制作器 ==================== -->
+  <div id="maker" class="panel">
+    <div class="card">
+      <div class="maker-layout">
+        <div class="canvas-wrap">
+          <canvas id="memeCanvas" width="400" height="400"></canvas>
+          <button class="btn btn-primary" onclick="downloadMeme()" style="width:100%;">📥 下载梗图</button>
+        </div>
+        <div>
+          <div class="input-group">
+            <label>选择模板</label>
+            <div class="template-grid" id="tmplGrid"></div>
+          </div>
+          <div class="input-group">
+            <label>上方文字</label>
+            <input type="text" id="topText" placeholder="输入上方文字..." maxlength="30" oninput="drawMeme()">
+          </div>
+          <div class="input-group">
+            <label>下方文字</label>
+            <input type="text" id="bottomText" placeholder="输入下方文字..." maxlength="30" oninput="drawMeme()">
+          </div>
+          <div class="input-group">
+            <label>背景颜色</label>
+            <div class="color-row" id="colorRow"></div>
+          </div>
+          <div class="input-group">
+            <label>文字颜色</label>
+            <div class="color-row" id="textColorRow"></div>
+          </div>
+          <div class="input-group">
+            <label>文字大小</label>
+            <select id="fontSize" onchange="drawMeme()">
+              <option value="28">小</option>
+              <option value="36" selected>中</option>
+              <option value="44">大</option>
+              <option value="56">超大</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- 事件弹窗 -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-emoji" id="modalEmoji">🎉</div>
+    <h3 id="modalTitle">事件标题</h3>
+    <p id="modalDesc">事件描述</p>
+    <button class="btn btn-primary" onclick="closeModal()">知道了！</button>
+  </div>
+</div>
+
+<script>
+// ==================== 全局数据 ====================
+const MEMES = [
+  { emoji: "🍚", name: "干饭人", desc: "出自网络视频，指吃饭非常积极的人。'干饭人，干饭魂，干饭都是人上人'", tag: "生活" },
+  { emoji: "😅", name: "我太难了", desc: "出自快手视频，原话为'我太难了，老铁，最近压力很大'", tag: "情绪" },
+  { emoji: "🥲", name: "破防了", desc: "原为游戏术语，现指心理防线被突破，感动或扎心", tag: "情绪" },
+  { emoji: "🙏", name: "yyds", desc: "永远的神的拼音缩写，用来赞美自己喜欢的事物", tag: "赞美" },
+  { emoji: "🔥", name: "绝绝子", desc: "表示太绝了，好极了，或差极了（语境不同含义不同）", tag: "赞美" },
+  { emoji: "🤡", name: "小丑竟是我自己", desc: "指自嘲像小丑一样，付出真心却被辜负", tag: "自嘲" },
+  { emoji: "💀", name: "社死", desc: "社会性死亡，指在公众面前出丑，尴尬到想消失", tag: "社交" },
+  { emoji: "🤝", name: "搭子", desc: "指某种活动的饭搭子、健身搭子等，一种浅于朋友的关系", tag: "社交" },
+  { emoji: "🧠", name: "CPU/KTV/PPT", desc: "指被精神控制、被洗脑，出自某恋爱综艺嘉宾发言", tag: "恋爱" },
+  { emoji: "🎭", name: "显眼包", desc: "指在人群中非常突出、爱表现自己的人", tag: "性格" },
+  { emoji: "🚀", name: "遥遥领先", desc: "出自华为发布会，现用来形容某事物远超竞争对手", tag: "科技" },
+  { emoji: "💰", name: "泼天的富贵", desc: "形容突然降临的巨大财富或机遇，出自《红楼梦》", tag: "财富" },
+  { emoji: "🔄", name: "命运的齿轮开始转动", desc: "指某个瞬间改变了人生轨迹，一系列事件由此引发", tag: "人生" },
+  { emoji: "😎", name: "i人/e人", desc: "MBTI人格测试，i人内向，e人外向，成为社交标签", tag: "性格" },
+  { emoji: "🙃", name: "听君一席话如听一席话", desc: "形容某些话说了等于没说的废话文学", tag: "吐槽" },
+  { emoji: "🫡", name: "确认过眼神", desc: "出自林俊杰歌词，表示已经验证了某件事", tag: "判断" },
+  { emoji: "💔", name: "纯爱战士", desc: "指相信纯粹爱情的人，也常被用来调侃被爱情伤害的人", tag: "恋爱" },
+  { emoji: "🎯", name: "一整个住下了", desc: "形容对某事物非常满意、沉浸其中不想出来", tag: "满足" },
+  { emoji: "🤯", name: "DNA动了", desc: "指看到某个熟悉的场景，刻在DNA里的记忆被唤醒", tag: "回忆" },
+  { emoji: "👑", name: "公主/王子请上车", desc: "一种网络礼貌用语，表示对对方的尊重和欢迎", tag: "礼貌" },
+  { emoji: "🫠", name: "融化了", desc: "形容被可爱或温柔的事物击中心房的感觉", tag: "可爱" },
+  { emoji: "🤌", name: "意大利手势", desc: "表示'你在想什么'，源自意大利经典手势的梗", tag: "迷惑" },
+  { emoji: "🫣", name: "偷偷藏不住", desc: "形容喜欢或开心到无法掩饰，情绪完全写在脸上", tag: "暗恋" },
+  { emoji: "💪", name: "狠狠搞钱", desc: "形容下定决心努力赚钱的状态，当代年轻人目标", tag: "搞钱" },
+];
+
+// 大富翁格子数据
+const BOARD_CELLS = [
+  { type: "event", emoji: "🏠", label: "起点", desc: "命运的齿轮开始转动！获得50梗币", effect: "coin", value: 50 },
+  { type: "meme", emoji: "🍚", label: "干饭格", desc: "你遇到了干饭人！一起干饭获得快乐+20梗币", effect: "coin", value: 20 },
+  { type: "challenge", emoji: "🤡", label: "小丑格", desc: "小丑竟是我自己...损失30梗币", effect: "coin", value: -30 },
+  { type: "reward", emoji: "💰", label: "泼天富贵", desc: "泼天的富贵砸中你！获得80梗币", effect: "coin", value: 80 },
+  { type: "event", emoji: "🚀", label: "遥遥领先", desc: "你遥遥领先！额外前进2格", effect: "move", value: 2 },
+  { type: "meme", emoji: "🥲", label: "破防格", desc: "你破防了...原地休息一回合", effect: "skip", value: 1 },
+  { type: "challenge", emoji: "💀", label: "社死格", desc: "大型社死现场！损失50梗币", effect: "coin", value: -50 },
+  { type: "reward", emoji: "👑", label: "王者格", desc: "公主/王子请上车！获得60梗币", effect: "coin", value: 60 },
+  { type: "event", emoji: "🔄", label: "齿轮格", desc: "命运的齿轮倒转！后退2格", effect: "move", value: -2 },
+  { type: "meme", emoji: "🙏", label: "yyds格", desc: "大家喊你yyds！获得40梗币", effect: "coin", value: 40 },
+  { type: "challenge", emoji: "🤯", label: "DNA格", desc: "DNA动了！损失20梗币但学到新梗", effect: "coin", value: -20 },
+  { type: "reward", emoji: "🎯", label: "住下格", desc: "一整个住下了！获得70梗币", effect: "coin", value: 70 },
+  { type: "event", emoji: "😎", label: "i/e人格格", desc: "测出你是e人！前进3格", effect: "move", value: 3 },
+  { type: "meme", emoji: "🔥", label: "绝绝子格", desc: "绝绝子！获得35梗币", effect: "coin", value: 35 },
+  { type: "challenge", emoji: "🙃", label: "废话格", desc: "听君一席话如听一席话，损失25梗币", effect: "coin", value: -25 },
+  { type: "reward", emoji: "💪", label: "搞钱格", desc: "狠狠搞钱！获得90梗币", effect: "coin", value: 90 },
+  { type: "event", emoji: "🎭", label: "显眼包格", desc: "你成了显眼包！前进1格", effect: "move", value: 1 },
+  { type: "meme", emoji: "🤝", label: "搭子格", desc: "找到饭搭子！获得30梗币", effect: "coin", value: 30 },
+  { type: "challenge", emoji: "💔", label: "纯爱格", desc: "纯爱战士受伤了...损失40梗币", effect: "coin", value: -40 },
+  { type: "reward", emoji: "🏆", label: "终点", desc: "恭喜通关！获得100梗币大奖！", effect: "win", value: 100 },
+];
+
+// 梗图模板
+const TEMPLATES = [
+  { emoji: "🍚", bg: "#ff6b6b", label: "干饭人" },
+  { emoji: "😅", bg: "#ffd93d", label: "我太难了" },
+  { emoji: "🥲", bg: "#6bcb77", label: "破防了" },
+  { emoji: "🙏", bg: "#4d96ff", label: "yyds" },
+  { emoji: "🤡", bg: "#ff9ff3", label: "小丑" },
+  { emoji: "💀", bg: "#54a0ff", label: "社死" },
+  { emoji: "🚀", bg: "#5f27cd", label: "遥遥领先" },
+  { emoji: "💰", bg: "#f368e0", label: "泼天富贵" },
+  { emoji: "🔥", bg: "#ee5a24", label: "绝绝子" },
+];
+
+const COLORS = ["#ff6b6b","#ffd93d","#6bcb77","#4d96ff","#ff9ff3","#54a0ff","#5f27cd","#ee5a24","#00b894","#fd79a8","#636e72","#2d3436"];
+const TEXT_COLORS = ["#ffffff","#000000","#ff6b6b","#ffd93d","#4d96ff","#6bcb77","#ff9ff3","#fd79a8"];
+
+// 状态
+let favorites = JSON.parse(localStorage.getItem('memeFavs') || '[]');
+let currentMemeIndex = -1;
+let gameState = { pos: 0, coins: 100, round: 1, skipNext: false };
+let selectedTemplate = 0;
+let selectedBgColor = COLORS[0];
+let selectedTextColor = TEXT_COLORS[0];
+
+// ==================== 导航切换 ====================
+function switchPanel(id, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'maker') drawMeme();
+  if (id === 'monopoly') renderBoard();
+}
+
+// ==================== 梗百科生成器 ====================
+function generateMeme() {
+  let idx;
+  do { idx = Math.floor(Math.random() * MEMES.length); } while (idx === currentMemeIndex && MEMES.length > 1);
+  currentMemeIndex = idx;
+  const m = MEMES[idx];
+  const display = document.getElementById('memeDisplay');
+  display.innerHTML = `
+    <div class="meme-emoji">${m.emoji}</div>
+    <div class="meme-title">${m.name}</div>
+    <div class="meme-desc">${m.desc}</div>
+    <span class="meme-tag">#${m.tag}</span>
+  `;
+  display.style.animation = 'none';
+  display.offsetHeight;
+  display.style.animation = 'fadeUp 0.4s ease';
+  spawnParticles(m.emoji);
+}
+
+function favoriteMeme() {
+  if (currentMemeIndex < 0) { alert('请先生成一个梗！'); return; }
+  const m = MEMES[currentMemeIndex];
+  if (favorites.some(f => f.name === m.name)) { alert('已经收藏过啦！'); return; }
+  favorites.push(m);
+  localStorage.setItem('memeFavs', JSON.stringify(favorites));
+  renderFavorites();
+  spawnParticles('⭐');
+}
+
+function renderFavorites() {
+  const grid = document.getElementById('favGrid');
+  document.getElementById('favCount').textContent = `(${favorites.length})`;
+  if (favorites.length === 0) {
+    grid.innerHTML = '<p style="color:var(--text2);font-size:0.9em;grid-column:1/-1;text-align:center;padding:20px;">还没有收藏任何梗哦，快去生成并收藏吧！</p>';
+    return;
+  }
+  grid.innerHTML = favorites.map((f, i) => `
+    <div class="fav-item" onclick="removeFav(${i})" title="点击移除">
+      <div class="fav-emoji">${f.emoji}</div>
+      <div class="fav-name">${f.name}</div>
+    </div>
+  `).join('');
+}
+
+function removeFav(i) {
+  favorites.splice(i, 1);
+  localStorage.setItem('memeFavs', JSON.stringify(favorites));
+  renderFavorites();
+}
+
+function shareMeme() {
+  if (currentMemeIndex < 0) { alert('请先生成一个梗！'); return; }
+  const m = MEMES[currentMemeIndex];
+  const text = `${m.emoji} ${m.name}\n${m.desc}\n#${m.tag}`;
+  navigator.clipboard.writeText(text).then(() => {
+    spawnParticles('📋');
+    alert('已复制到剪贴板！');
+  }).catch(() => {
+    alert('复制失败，请手动复制');
+  });
+}
+
+// ==================== 热梗大富翁 ====================
+function renderBoard() {
+  const board = document.getElementById('board');
+  board.innerHTML = BOARD_CELLS.map((c, i) => `
+    <div class="cell cell-type${i === gameState.pos ? ' player-here' : ''}" id="cell${i}">
+      <span class="cell-emoji">${c.emoji}</span>
+      <span class="cell-label">${c.label}</span>
+    </div>
+  `).join('');
+  updateStats();
+}
+
+function updateStats() {
+  document.getElementById('playerPos').textContent = gameState.pos;
+  document.getElementById('playerCoins').textContent = gameState.coins;
+  document.getElementById('playerRound').textContent = gameState.round;
+}
+
+function rollDice() {
+  if (gameState.skipNext) {
+    gameState.skipNext = false;
+    addLog('你休息了一回合（社死恢复中）', 'challenge');
+    gameState.round++;
+    updateStats();
+    return;
+  }
+  const dice = document.getElementById('dice');
+  dice.classList.add('rolling');
+  const result = Math.floor(Math.random() * 6) + 1;
+
+  setTimeout(() => {
+    dice.classList.remove('rolling');
+    dice.textContent = result;
+    movePlayer(result);
+  }, 600);
+}
+
+function movePlayer(steps) {
+  const newPos = Math.min(gameState.pos + steps, BOARD_CELLS.length - 1);
+  gameState.pos = newPos;
+  gameState.round++;
+  renderBoard();
+  addLog(`掷出 ${steps} 点，前进到第 ${newPos + 1} 格`, 'meme');
+
+  setTimeout(() => triggerCell(newPos), 300);
+}
+
+function triggerCell(idx) {
+  const cell = BOARD_CELLS[idx];
+  showModal(cell.emoji, cell.label, cell.desc);
+
+  if (cell.effect === 'coin') {
+    gameState.coins += cell.value;
+    addLog(`${cell.label}: ${cell.value > 0 ? '+' : ''}${cell.value} 梗币`, cell.type);
+  } else if (cell.effect === 'move') {
+    const newPos = Math.max(0, Math.min(gameState.pos + cell.value, BOARD_CELLS.length - 1));
+    gameState.pos = newPos;
+    renderBoard();
+    addLog(`${cell.label}: 移动 ${cell.value > 0 ? '+' : ''}${cell.value} 格`, cell.type);
+  } else if (cell.effect === 'skip') {
+    gameState.skipNext = true;
+    addLog(`${cell.label}: 下回合跳过`, cell.type);
+  } else if (cell.effect === 'win') {
+    gameState.coins += cell.value;
+    addLog(`🎉 通关！获得 ${cell.value} 梗币大奖！`, 'reward');
+    setTimeout(() => {
+      if (confirm(`恭喜通关！最终梗币: ${gameState.coins}\n是否重新开始？`)) resetGame();
+    }, 800);
+  }
+  updateStats();
+}
+
+function addLog(text, type) {
+  const box = document.getElementById('logBox');
+  const time = `T${gameState.round}`;
+  const entry = document.createElement('div');
+  entry.className = `log-entry ${type}`;
+  entry.innerHTML = `<span class="time">[${time}]</span>${text}`;
+  box.prepend(entry);
+  if (box.children.length > 50) box.removeChild(box.lastChild);
+}
+
+function resetGame() {
+  gameState = { pos: 0, coins: 100, round: 1, skipNext: false };
+  renderBoard();
+  document.getElementById('logBox').innerHTML = '<div class="log-entry"><span class="time">系统</span>游戏重新开始！掷骰子前进吧～</div>';
+  document.getElementById('dice').textContent = '🎲';
+}
+
+// ==================== 梗图制作器 ====================
+function initMaker() {
+  // 模板
+  const tmplGrid = document.getElementById('tmplGrid');
+  tmplGrid.innerHTML = TEMPLATES.map((t, i) => `
+    <div class="tmpl-item ${i === 0 ? 'selected' : ''}" onclick="selectTemplate(${i})" data-idx="${i}">
+      ${t.emoji}
+    </div>
+  `).join('');
+
+  // 背景颜色
+  const colorRow = document.getElementById('colorRow');
+  colorRow.innerHTML = COLORS.map((c, i) => `
+    <div class="color-dot ${i === 0 ? 'selected' : ''}" style="background:${c}" onclick="selectBgColor(${i})" data-idx="${i}"></div>
+  `).join('');
+
+  // 文字颜色
+  const textColorRow = document.getElementById('textColorRow');
+  textColorRow.innerHTML = TEXT_COLORS.map((c, i) => `
+    <div class="color-dot ${i === 0 ? 'selected' : ''}" style="background:${c}" onclick="selectTextColor(${i})" data-idx="${i}"></div>
+  `).join('');
+}
+
+function selectTemplate(i) {
+  selectedTemplate = i;
+  document.querySelectorAll('.tmpl-item').forEach((el, idx) => {
+    el.classList.toggle('selected', idx === i);
+  });
+  drawMeme();
+}
+
+function selectBgColor(i) {
+  selectedBgColor = COLORS[i];
+  document.querySelectorAll('#colorRow .color-dot').forEach((el, idx) => {
+    el.classList.toggle('selected', idx === i);
+  });
+  drawMeme();
+}
+
+function selectTextColor(i) {
+  selectedTextColor = TEXT_COLORS[i];
+  document.querySelectorAll('#textColorRow .color-dot').forEach((el, idx) => {
+    el.classList.toggle('selected', idx === i);
+  });
+  drawMeme();
+}
+
+function drawMeme() {
+  const canvas = document.getElementById('memeCanvas');
+  const ctx = canvas.getContext('2d');
+  const tmpl = TEMPLATES[selectedTemplate];
+  const topText = document.getElementById('topText').value.toUpperCase();
+  const bottomText = document.getElementById('bottomText').value.toUpperCase();
+  const fontSize = parseInt(document.getElementById('fontSize').value);
+
+  // 背景
+  ctx.fillStyle = selectedBgColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // 装饰图案
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.beginPath();
+  ctx.arc(200, 200, 150, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 中心emoji
+  ctx.font = '80px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(tmpl.emoji, 200, 180);
+
+  // 标签
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.fillText(tmpl.label, 200, 320);
+
+  // 文字样式
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+  ctx.lineWidth = fontSize / 8;
+  ctx.lineJoin = 'round';
+
+  if (topText) {
+    ctx.strokeText(topText, 200, 40);
+    ctx.fillStyle = selectedTextColor;
+    ctx.fillText(topText, 200, 40);
+  }
+  if (bottomText) {
+    ctx.strokeText(bottomText, 200, canvas.height - 25);
+    ctx.fillStyle = selectedTextColor;
+    ctx.fillText(bottomText, 200, canvas.height - 25);
+  }
+}
+
+function downloadMeme() {
+  const canvas = document.getElementById('memeCanvas');
+  const link = document.createElement('a');
+  link.download = `梗图_${Date.now()}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+  spawnParticles('📥');
+}
+
+// ==================== 弹窗 ====================
+function showModal(emoji, title, desc) {
+  document.getElementById('modalEmoji').textContent = emoji;
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalDesc').textContent = desc;
+  document.getElementById('modalOverlay').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('show');
+}
+
+// 点击遮罩关闭
+document.getElementById('modalOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// ==================== 粒子效果 ====================
+function spawnParticles(emoji) {
+  for (let i = 0; i < 8; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.textContent = emoji;
+    p.style.left = (window.innerWidth / 2 + (Math.random() - 0.5) * 100) + 'px';
+    p.style.top = (window.innerHeight / 2 + (Math.random() - 0.5) * 100) + 'px';
+    p.style.setProperty('--dx', (Math.random() - 0.5) * 200 + 'px');
+    p.style.setProperty('--dy', (Math.random() - 0.5) * 200 - 50 + 'px');
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), 1000);
+  }
+}
+
+// ==================== 初始化 ====================
+document.addEventListener('DOMContentLoaded', () => {
+  initMaker();
+  drawMeme();
+  renderFavorites();
+  renderBoard();
+
+  // 键盘快捷键
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && document.getElementById('monopoly').classList.contains('active')) {
+      e.preventDefault();
+      rollDice();
+    }
+    if (e.code === 'Enter' && document.getElementById('memeWiki').classList.contains('active')) {
+      generateMeme();
+    }
+  });
+});
+</script>
+</body>
+</html>

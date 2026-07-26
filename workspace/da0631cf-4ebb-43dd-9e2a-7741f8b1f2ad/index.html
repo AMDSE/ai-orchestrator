@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="B站2026【大狗×耄耋】梗主题GalGame - 互动视觉小说">
+    <title>大狗×耄耋 - B站2026互动游戏</title>
+    <style>
+        :root {
+            --primary-color: #00A1D6;
+            --secondary-color: #FB7299;
+            --bg-dark: #1a1a2e;
+            --bg-light: #f0f2f5;
+            --text-dark: #2c3e50;
+            --text-light: #ecf0f1;
+            --dialog-bg: rgba(255, 255, 255, 0.95);
+            --dialog-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            --transition-speed: 0.3s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            overflow: hidden;
+            color: var(--text-light);
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #game-container {
+            width: 100vw;
+            height: 100vh;
+            max-width: 100%;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 标题画面 */
+        #title-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+            z-index: 100;
+            transition: opacity 0.8s ease;
+        }
+
+        #title-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .title-logo {
+            font-size: clamp(2rem, 8vw, 4.5rem);
+            font-weight: 900;
+            background: linear-gradient(135deg, #00A1D6 0%, #FB7299 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 4px 20px rgba(0, 161, 214, 0.3);
+            margin-bottom: 0.5rem;
+            letter-spacing: 2px;
+        }
+
+        .title-subtitle {
+            font-size: clamp(0.9rem, 3vw, 1.3rem);
+            color: #a0a0a0;
+            margin-bottom: 3rem;
+            letter-spacing: 1px;
+        }
+
+        .title-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            width: min(80%, 320px);
+        }
+
+        .menu-btn {
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            border: 2px solid var(--primary-color);
+            background: rgba(0, 161, 214, 0.1);
+            color: var(--primary-color);
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all var(--transition-speed);
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+
+        .menu-btn:hover {
+            background: var(--primary-color);
+            color: #fff;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 161, 214, 0.4);
+        }
+
+        .menu-btn:active {
+            transform: translateY(0);
+        }
+
+        /* 游戏画面 */
+        #game-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+        }
+
+        #game-screen.active {
+            display: flex;
+        }
+
+        /* 背景层 */
+        #bg-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+            transition: background-image 0.5s ease;
+            z-index: 1;
+        }
+
+        /* 角色层 */
+        #chara-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .chara-sprite {
+            max-height: 85vh;
+            max-width: 90%;
+            object-fit: contain;
+            transition: all 0.5s ease;
+            filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.4));
+        }
+
+        /* 对话框 */
+        #dialog-container {
+            position: absolute;
+            bottom: 2%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(95%, 900px);
+            z-index: 10;
+            padding: 0 1rem;
+        }
+
+        #dialog-box {
+            background: var(--dialog-bg);
+            border-radius: 20px;
+            padding: 1.5rem 2rem;
+            box-shadow: var(--dialog-shadow);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            min-height: 140px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            cursor: pointer;
+            transition: all var(--transition-speed);
+        }
+
+        #dialog-box:hover {
+            transform: translateY(-2px);
+        }
+
+        #speaker-name {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        #dialog-text {
+            font-size: clamp(1rem, 2.5vw, 1.2rem);
+            line-height: 1.7;
+            color: var(--text-dark);
+            min-height: 3em;
+        }
+
+        #dialog-text .highlight {
+            color: var(--secondary-color);
+            font-weight: 700;
+        }
+
+        /* 选项按钮 */
+        #choices-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 20;
+            display: none;
+            flex-direction: column;
+            gap: 1rem;
+            width: min(90%, 500px);
+        }
+
+        #choices-container.active {
+            display: flex;
+        }
+
+        .choice-btn {
+            padding: 1.2rem 2rem;
+            font-size: 1.1rem;
+            border: none;
+            background: linear-gradient(135deg, rgba(0, 161, 214, 0.9) 0%, rgba(251, 114, 153, 0.9) 100%);
+            color: #fff;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: all var(--transition-speed);
+            font-weight: 600;
+            text-align: center;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        .choice-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 12px 35px rgba(0, 161, 214, 0.5);
+        }
+
+        /* UI按钮 */
+        #ui-buttons {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            z-index: 30;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .ui-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            background: rgba(0, 0, 0, 0.4);
+            color: #fff;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all var(--transition-speed);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ui-btn:hover {
+            background: rgba(0, 161, 214, 0.8);
+            border-color: var(--primary-color);
+        }
+
+        /* 存档菜单 */
+        #save-menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 50;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+
+        #save-menu.active {
+            display: flex;
+        }
+
+        .save-panel {
+            background: #fff;
+            border-radius: 20px;
+            padding: 2rem;
+            width: min(90%, 400px);
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .save-panel h3 {
+            color: var(--text-dark);
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+
+        .save-slot {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .save-slot button {
+            flex: 1;
+            padding: 1rem;
+            border: 2px solid var(--primary-color);
+            background: transparent;
+            color: var(--primary-color);
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all var(--transition-speed);
+        }
+
+        .save-slot button:hover {
+            background: var(--primary-color);
+            color: #fff;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            #dialog-box {
+                padding: 1rem 1.2rem;
+                min-height: 110px;
+                border-radius: 15px;
+            }
+
+            #dialog-text {
+                font-size: 0.95rem;
+                line-height: 1.6;
+            }
+
+            .chara-sprite {
+                max-height: 70vh;
+            }
+
+            #ui-buttons {
+                top: 0.5rem;
+                right: 0.5rem;
+            }
+
+            .ui-btn {
+                width: 38px;
+                height: 38px;
+                font-size: 1rem;
+            }
+
+            .title-menu {
+                width: 85%;
+            }
+
+            .menu-btn {
+                padding: 0.9rem 1.5rem;
+                font-size: 1rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            #dialog-container {
+                bottom: 1%;
+                padding: 0 0.5rem;
+            }
+
+            #dialog-box {
+                padding: 0.8rem 1rem;
+                min-height: 100px;
+            }
+
+            #dialog-text {
+                font-size: 0.85rem;
+            }
+
+            .chara-sprite {
+                max-height: 60vh;
+            }
+        }
+
+        /* 动画 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.6s ease forwards;
+        }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--primary-color);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <!-- 标题画面 -->
+        <div id="title-screen">
+            <h1 class="title-logo">大狗×耄耋</h1>
+            <p class="title-subtitle">B站2026 梗主题互动视觉小说</p>
+            <div class="title-menu">
+                <button class="menu-btn" onclick="startNewGame()">开始游戏</button>
+                <button class="menu-btn" onclick="loadGame()">继续游戏</button>
+                <button class="menu-btn" onclick="showGallery()">图鉴鉴赏</button>
+            </div>
+        </div>
+
+        <!-- 游戏画面 -->
+        <div id="game-screen">
+            <div id="bg-layer"></div>
+            <div id="chara-layer">
+                <svg id="chara-sprite" class="chara-sprite" viewBox="0 0 400 600" xmlns="http://www.w3.org/2000/svg">
+                    <!-- 默认角色立绘（大狗） -->
+                    <defs>
+                        <linearGradient id="dogGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#FFD93D"/>
+                            <stop offset="100%" style="stop-color:#FF6B35"/>
+                        </linearGradient>
+                        <linearGradient id="maodieGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#E8E8E8"/>
+                            <stop offset="100%" style="stop-color:#A0A0A0"/>
+                        </linearGradient>
+                    </defs>
+                    <!-- 身体 -->
+                    <ellipse cx="200" cy="450" rx="120" ry="140" fill="url(#dogGrad)"/>
+                    <!-- 头 -->
+                    <circle cx="200" cy="280" r="100" fill="url(#dogGrad)"/>
+                    <!-- 耳朵 -->
+                    <ellipse cx="130" cy="200" rx="30" ry="50" fill="#FF8C42"/>
+                    <ellipse cx="270" cy="200" rx="30" ry="50" fill="#FF8C42"/>
+                    <!-- 眼睛 -->
+                    <circle cx="170" cy="270" r="15" fill="#333"/>
+                    <circle cx="230" cy="270" r="15" fill="#333"/>
+                    <circle cx="175" cy="265" r="5" fill="#fff"/>
+                    <circle cx="235" cy="265" r="5" fill="#fff"/>
+                    <!-- 鼻子 -->
+                    <ellipse cx="200" cy="310" rx="12" ry="8" fill="#333"/>
+                    <!-- 嘴 -->
+                    <path d="M 180 330 Q 200 350 220 330" stroke="#333" stroke-width="3" fill="none"/>
+                    <!-- 腮红 -->
+                    <circle cx="150" cy="300" r="12" fill="#FFB6C1" opacity="0.6"/>
+                    <circle cx="250" cy="300" r="12" fill="#FFB6C1" opacity="0.6"/>
+                </svg>
+            </div>
+
+            <!-- 对话框 -->
+            <div id="dialog-container">
+                <div id="dialog-box" onclick="advanceDialog()">
+                    <div id="speaker-name">旁白</div>
+                    <div id="dialog-text">点击屏幕继续...</div>
+                </div>
+            </div>
+
+            <!-- 选项容器 -->
+            <div id="choices-container"></div>
+
+            <!-- UI按钮 -->
+            <div id="ui-buttons">
+                <button class="ui-btn" onclick="toggleSaveMenu()" title="存档">💾</button>
+                <button class="ui-btn" onclick="toggleAuto()" title="自动">⏩</button>
+                <button class="ui-btn" onclick="goToTitle()" title="标题">🏠</button>
+            </div>
+        </div>
+
+        <!-- 存档菜单 -->
+        <div id="save-menu">
+            <div class="save-panel">
+                <h3>存档管理</h3>
+                <div class="save-slot">
+                    <button onclick="saveGame(1)">存档 1</button>
+                    <button onclick="saveGame(2)">存档 2</button>
+                </div>
+                <div class="save-slot">
+                    <button onclick="saveGame(3)">存档 3</button>
+                    <button onclick="loadFromSlot(1)">读取 1</button>
+                </div>
+                <div class="save-slot">
+                    <button onclick="loadFromSlot(2)">读取 2</button>
+                    <button onclick="loadFromSlot(3)">读取 3</button>
+                </div>
+                <button class="menu-btn" style="margin-top:1rem; width:100%;" onclick="toggleSaveMenu()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== 游戏数据 ====================
+        const gameScript = {
+            scenes: {
+                chapter1: {
+                    bg: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                    dialogs: [
+                        { speaker: "旁白", text: "2026年的B站，虚拟与现实交织，梗文化蓬勃发展..." },
+                        { speaker: "旁白", text: "在繁华的虚拟都市中，住着一位名叫<span class='highlight'>大狗</span>的年轻UP主。" },
+                        { speaker: "大狗", text: "今天也要努力做视频！让全世界看到我的热情！", chara: "dog_happy" },
+                        { speaker: "旁白", text: "大狗总是充满活力，但最近他遇到了创作瓶颈。" },
+                        { speaker: "大狗", text: "唉...最近的播放量一直上不去，是不是我的内容太老套了？", chara: "dog_sad" },
+                        { speaker: "旁白", text: "就在大狗迷茫时，他偶然刷到了一个古老的视频..." },
+                        { speaker: "旁白", text: "视频里的UP主名叫<span class='highlight'>耄耋</span>，虽然年过八旬，却依然保持着对创作的热爱。" },
+                        { speaker: "耄耋", text: "年轻人，做视频最重要的是真诚，而不是追逐流量。", chara: "maodie_normal" },
+                        { speaker: "大狗", text: "这位老爷爷说得对...我想去请教他！", chara: "dog_happy" }
+                    ],
+                    choices: [
+                        { text: "立即联系耄耋", next: "chapter2a" },
+                        { text: "先研究耄耋的视频", next: "chapter2b" }
+                    ]
+                },
+                chapter2a: {
+                    bg: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+                    dialogs: [
+                        { speaker: "旁白", text: "大狗鼓起勇气，给耄耋发了私信..." },
+                        { speaker: "大狗", text: "耄耋老师您好！我是新人UP主大狗，看了您的视频深受启发，能请教您一些问题吗？", chara: "dog_normal" },
+                        { speaker: "耄耋", text: "哦？现在还有年轻人看我的视频？真是难得啊...", chara: "maodie_happy" },
+                        { speaker: "耄耋", text: "好吧，下午三点，虚拟公园见。", chara: "maodie_normal" },
+                        { speaker: "大狗", text: "太好了！我一定准时到！", chara: "dog_happy" }
+                    ],
+                    choices: [
+                        { text: "前往虚拟公园", next: "chapter3" }
+                    ]
+                },
+                chapter2b: {
+                    bg: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+                    dialogs: [
+                        { speaker: "旁白", text: "大狗花了整整一周时间，把耄耋的所有视频都看了一遍。" },
+                        { speaker: "大狗", text: "原来耄耋老师以前是这么厉害的UP主...他的每个视频都充满了对生活的热爱。", chara: "dog_normal" },
+                        { speaker: "旁白", text: "大狗决定给耄耋发一封长长的感想..." },
+                        { speaker: "耄耋", text: "你是第一个认真看完我所有视频的人...来吧，我们见一面。", chara: "maodie_happy" }
+                    ],
+                    choices: [
+                        { text: "前往会面地点", next: "chapter3" }
+                    ]
+                },
+                chapter3: {
+                    bg: "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)",
+                    dialogs: [
+                        { speaker: "旁白", text: "虚拟公园里，大狗终于见到了耄耋。" },
+                        { speaker: "耄耋", text: "你就是大狗？比我想象的要年轻。", chara: "maodie_normal" },
+                        { speaker: "大狗", text: "耄耋老师！您比视频里看起来更精神！", chara: "dog_happy" },
+                        { speaker: "耄耋", text: "哈哈，别看我年纪大了，这虚拟形象可是我自己设计的。", chara: "maodie_happy" },
+                        { speaker: "旁白", text: "两人聊了很久，从创作理念到人生哲学..." },
+                        { speaker: "耄耋", text: "大狗，你想不想和我合作一个视频？", chara: "maodie_normal" },
+                        { speaker: "大狗", text: "真的可以吗？！我当然愿意！", chara: "dog_happy" }
+                    ],
+                    choices: [
+                        { text: "讨论视频主题", next: "chapter4a" },
+                        { text: "询问合作细节", next: "chapter4b" }
+                    ]
+                },
+                chapter4a: {
+                    bg: "linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)",
+                    dialogs: [
+                        { speaker: "大狗", text: "老师，我们做什么主题好呢？是游戏区还是生活区？", chara: "dog_normal" },
+                        { speaker: "耄耋", text: "那些都不重要。重要的是，你想表达什么？", chara: "maodie_normal" },
+                        { speaker: "大狗", text: "我想表达...不管多大年纪，都要保持对生活的热情！", chara: "dog_happy" },
+                        { speaker: "耄耋", text: "说得好。那就做一期关于'年龄与梦想'的视频吧。", chara: "maodie_happy" }
+                    ],
+                    choices: [
+                        { text: "开始拍摄", next: "ending_a" }
+                    ]
+                },
+                chapter4b: {
+                    bg: "linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)",
+                    dialogs: [
+                        { speaker: "大狗", text: "老师，具体要怎么合作呢？您负责什么部分？", chara: "dog_normal" },
+                        { speaker: "耄耋", text: "我负责内容策划，你负责技术执行。如何？", chara: "maodie_normal" },
+                        { speaker: "大狗", text: "没问题！我一定全力以赴！", chara: "dog_happy" },
+                        { speaker: "耄耋", text: "那就这么定了。年轻人，好好干。", chara: "maodie_happy" }
+                    ],
+                    choices: [
+                        { text: "开始制作", next: "ending_b" }
+                    ]
+                },
+                ending_a: {
+                    bg: "linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)",
+                    dialogs: [
+                        { speaker: "旁白", text: "三个月后，视频《年龄不是界限》大获成功。" },
+                        { speaker: "旁白", text: "视频播放量突破百万，感动了无数观众。" },
+                        { speaker: "大狗", text: "老师，我们做到了！谢谢您！", chara: "dog_happy" },
+                        { speaker: "耄耋", text: "不，这是你自己的努力。记住，真诚永远是最好的创作。", chara: "maodie_happy" },
+                        { speaker: "旁白", text: "大狗和耄耋成为了忘年之交，继续创作着温暖人心的内容。" },
+                        { speaker: "旁白", text: "【结局A：跨越年龄的共鸣】" }
+                    ],
+                    choices: [
+                        { text: "重新开始", next: "title" }
+                    ]
+                },
+                ending_b: {
+                    bg: "linear-gradient(135deg, #f6d365 0%, #fda085 100%)",
+                    dialogs: [
+                        { speaker: "旁白", text: "大狗独自完成了视频的制作，但总觉得缺少了什么。" },
+                        { speaker: "大狗", text: "老师说得对，技术再好，没有灵魂的视频也只是空壳。", chara: "dog_sad" },
+                        { speaker: "旁白", text: "大狗重新联系了耄耋，两人再次合作。" },
+                        { speaker: "耄耋", text: "想通了？来吧，我们一起做有意义的内容。", chara: "maodie_happy" },
+                        { speaker: "旁白", text: "【结局B：成长的领悟】" }
+                    ],
+                    choices: [
+                        { text: "重新开始", next: "title" }
+                    ]
+                }
+            }
+        };
+
+        // ==================== 游戏状态 ====================
+        let gameState = {
+            currentScene: 'chapter1',
+            dialogIndex: 0,
+            isAuto: false,
+            autoTimer: null,
+            flags: {}
+        };
+
+        // ==================== DOM元素 ====================
+        const titleScreen = document.getElementById('title-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const bgLayer = document.getElementById('bg-layer');
+        const charaSprite = document.getElementById('chara-sprite');
+        const speakerName = document.getElementById('speaker-name');
+        const dialogText = document.getElementById('dialog-text');
+        const choicesContainer = document.getElementById('choices-container');
+        const saveMenu = document.getElementById('save-menu');
+
+        // ==================== 音频系统 ====================
+        const audioCtx = new(window.AudioContext || window.webkitAudioContext)();
+
+        function playSE(type) {
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            if (type === 'click') {
+                oscillator.frequency.value = 800;
+                gainNode.gain.value = 0.1;
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.1);
+            } else if (type === 'select') {
+                oscillator.frequency.value = 1200;
+                gainNode.gain.value = 0.15;
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.15);
+            }
+        }
+
+        // ==================== 角色立绘系统 ====================
+        const charaData = {
+            dog_normal: `
+                <ellipse cx="200" cy="450" rx="120" ry="140" fill="url(#dogGrad)"/>
+                <circle cx="200" cy="280" r="100" fill="url(#dogGrad)"/>
+                <ellipse cx="130" cy="200" rx="30" ry="50" fill="#FF8C42"/>
+                <ellipse cx="270" cy="200" rx="30" ry="50" fill="#FF8C42"/>
+                <circle cx="170" cy="270" r="15" fill="#333"/>
+                <circle cx="230" cy="270" r="15" fill="#333"/>
+                <circle cx="175" cy="265" r="5" fill="#fff"/>
+                <circle cx="235" cy="265" r="5" fill="#fff"/>
+                <ellipse cx="200" cy="310" rx="12" ry="8" fill="#333"/>
+                <path d="M 180 330 Q 200 350 220 330" stroke="#333" stroke-width="3" fill="none"/>
+                <circle cx="150" cy="300" r="12" fill="#FFB6C1" opacity="0.6"/>
+                <circle cx="250" cy="300" r="12" fill="#FFB6C1" opacity="0.6"/>
+            `,
+            dog_happy: `
+                <ellipse cx="200" cy="450" rx="120" ry="140" fill="url(#dogGrad)"/>
+                <circle cx="200" cy="280" r="100" fill="url(#dogGrad)"/>
+                <ellipse cx="130" cy="200" rx="30" ry="50" fill="#FF8C42"/>
+                <ellipse cx="270" cy="200" rx="30" ry="50" fill="#FF8C42"/>
+                <path d="M 155 260 Q 170 245 185 260" stroke="#333" stroke-width="4" fill="none"/>
+                <path d="M 215 260 Q 230 245 245 260" stroke="#333" stroke-width="4" fill="none"/>
+                <ellipse cx="200" cy="310" rx="12" ry="8" fill="#333"/>
+                <path d="M 170 330 Q 200 360 230 330" stroke="#333" stroke-width="3" fill="none"/>
+                <circle cx="150" cy="300" r="15" fill="#FFB6C1" opacity="0.7"/>
+                <circle cx="250" cy="300" r="15" fill="#FFB6C1" opacity="0.7"/>
+            `,
+            dog_sad: `
+                <ellipse cx="200" cy="450" rx="120" ry="140" fill="url(#dogGrad)"/>
+                <circle cx="200" cy="280" r="100" fill="url(#dogGrad)"/>
+                <ellipse cx="130" cy="200" rx="30" ry="50" fill="#FF8C42"/>
+                <ellipse cx="270" cy="200" rx="30" ry="50" fill="#FF8C42"/>
+                <circle cx="170" cy="270" r="12" fill="#333"/>
+                <circle cx="230" cy="270" r="12" fill="#333"/>
+                <ellipse cx="200" cy="315" rx="10" ry="6" fill="#333"/>
+                <path d="M 175 340 Q 200 325 225 340" stroke="#333" stroke-width="3" fill="none"/>
+            `,
+            maodie_normal: `
+                <ellipse cx="200" cy="450" rx="110" ry="130" fill="url(#maodieGrad)"/>
+                <circle cx="200" cy="280" r="90" fill="url(#maodieGrad)"/>
+                <ellipse cx="140" cy="220" rx="25" ry="40" fill="#C0C0C0"/>
+                <ellipse cx="260" cy="220" rx="25" ry="40" fill="#C0C0C0"/>
+                <circle cx="170" cy="270" r="12" fill="#333"/>
+                <circle cx="230" cy="270" r="12" fill="#333"/>
+                <rect x="160" y="290" width="80" height="20" rx="10" fill="#8B4513"/>
+                <ellipse cx="200" cy="320" rx="10" ry="6" fill="#333"/>
+                <path d="M 180 340 Q 200 350 220 340" stroke="#333" stroke-width="2" fill="none"/>
+            `,
+            maodie_happy: `
+                <ellipse cx="200" cy="450" rx="110" ry="130" fill="url(#maodieGrad)"/>
+                <circle cx="200" cy="280" r="90" fill="url(#maodieGrad)"/>
+                <ellipse cx="140" cy="220" rx="25" ry="40" fill="#C0C0C0"/>
+                <ellipse cx="260" cy="220" rx="25" ry="40" fill="#C0C0C0"/>
+                <path d="M 155 260 Q 170 245 185 260" stroke="#333" stroke-width="3" fill="none"/>
+                <path d="M 215 260 Q 230 245 245 260" stroke="#333" stroke-width="3" fill="none"/>
+                <rect x="160" y="290" width="80" height="20" rx="10" fill="#8B4513"/>
+                <ellipse cx="200" cy="320" rx="10" ry="6" fill="#333"/>
+                <path d="M 170 340 Q 200 360 230 340" stroke="#333" stroke-width="2" fill="none"/>
+            `
+        };
+
+        function updateCharaSprite(charaKey) {
+            if (charaKey && charaData[charaKey]) {
+                charaSprite.innerHTML = `
+                    <defs>
+                        <linearGradient id="dogGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#FFD93D"/>
+                            <stop offset="100%" style="stop-color:#FF6B35"/>
+                        </linearGradient>
+                        <linearGradient id="maodieGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#E8E8E8"/>
+                            <stop offset="100%" style="stop-color:#A0A0A0"/>
+                        </linearGradient>
+                    </defs>
+                    ${charaData[charaKey]}
+                `;
+                charaSprite.style.opacity = '1';
+            } else {
+                charaSprite.style.opacity = '0';
+            }
+        }
+
+        // ==================== 游戏引擎 ====================
+        function startNewGame() {
+            playSE('click');
+            gameState.currentScene = 'chapter1';
+            gameState.dialogIndex = 0;
+            gameState.flags = {};
+            titleScreen.classList.add('hidden');
+            gameScreen.classList.add('active');
+            loadScene('chapter1');
+        }
+
+        function loadScene(sceneId) {
+            const scene = gameScript.scenes[sceneId];
+            if (!scene) return;
+
+            gameState.currentScene = sceneId;
+            gameState.dialogIndex = 0;
+
+            // 更新背景
+            bgLayer.style.background = scene.bg;
+
+            // 隐藏选项
+            choicesContainer.classList.remove('active');
+            choicesContainer.innerHTML = '';
+
+            // 显示第一条对话
+            showDialog();
+        }
+
+        function showDialog() {
+            const scene = gameScript.scenes[gameState.currentScene];
+            if (!scene) return;
+
+            const dialog = scene.dialogs[gameState.dialogIndex];
+            if (!dialog) {
+                // 对话结束，显示选项
+                showChoices();
+                return;
+            }
+
+            speakerName.textContent = dialog.speaker;
+            dialogText.innerHTML = dialog.text;
+
+            // 更新角色立绘
+            updateCharaSprite(dialog.chara);
+
+            // 自动模式
+            if (gameState.isAuto) {
+                gameState.autoTimer = setTimeout(() => {
+                    advanceDialog();
+                }, 3000);
+            }
+        }
+
+        function advanceDialog() {
+            if (gameState.autoTimer) {
+                clearTimeout(gameState.autoTimer);
+                gameState.autoTimer = null;
+            }
+
+            playSE('click');
+            gameState.dialogIndex++;
+            showDialog();
+        }
+
+        function showChoices() {
+            const scene = gameScript.scenes[gameState.currentScene];
+            if (!scene || !scene.choices) return;
+
+            choicesContainer.innerHTML = '';
+            scene.choices.forEach(choice => {
+                const btn = document.createElement('button');
+                btn.className = 'choice-btn fade-in';
+                btn.textContent = choice.text;
+                btn.onclick = () => {
+                    playSE('select');
+                    if (choice.next === 'title') {
+                        goToTitle();
+                    } else {
+                        loadScene(choice.next);
+                    }
+                };
+                choicesContainer.appendChild(btn);
+            });
+            choicesContainer.classList.add('active');
+        }
+
+        function goToTitle() {
+            playSE('click');
+            if (gameState.autoTimer) {
+                clearTimeout(gameState.autoTimer);
+                gameState.autoTimer = null;
+            }
+            gameScreen.classList.remove('active');
+            titleScreen.classList.remove('hidden');
+            choicesContainer.classList.remove('active');
+            updateCharaSprite(null);
+        }
+
+        function toggleAuto() {
+            playSE('click');
+            gameState.isAuto = !gameState.isAuto;
+            if (gameState.isAuto) {
+                showDialog();
+            } else {
+                if (gameState.autoTimer) {
+                    clearTimeout(gameState.autoTimer);
+                    gameState.autoTimer = null;
+                }
+            }
+        }
+
+        // ==================== 存档系统 ====================
+        function saveGame(slot) {
+            playSE('select');
+            const saveData = {
+                currentScene: gameState.currentScene,
+                dialogIndex: gameState.dialogIndex,
+                flags: gameState.flags,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(`bilibili_game_save_${slot}`, JSON.stringify(saveData));
+            alert(`存档 ${slot} 已保存！`);
+        }
+
+        function loadFromSlot(slot) {
+            playSE('select');
+            const saveData = localStorage.getItem(`bilibili_game_save_${slot}`);
+            if (saveData) {
+                const data = JSON.parse(saveData);
+                gameState.currentScene = data.currentScene;
+                gameState.dialogIndex = data.dialogIndex;
+                gameState.flags = data.flags || {};
+                saveMenu.classList.remove('active');
+                titleScreen.classList.add('hidden');
+                gameScreen.classList.add('active');
+                loadScene(data.currentScene);
+            } else {
+                alert('没有找到存档！');
+            }
+        }
+
+        function loadGame() {
+            playSE('click');
+            const saveData = localStorage.getItem('bilibili_game_save_1');
+            if (saveData) {
+                loadFromSlot(1);
+            } else {
+                alert('没有找到存档，开始新游戏！');
+                startNewGame();
+            }
+        }
+
+        function toggleSaveMenu() {
+            playSE('click');
+            saveMenu.classList.toggle('active');
+        }
+
+        function showGallery() {
+            playSE('click');
+            alert('图鉴系统开发中...\n\n已解锁角色：\n- 大狗（新人UP主）\n- 耄耋（资深UP主）');
+        }
+
+        // ==================== 初始化 ====================
+        document.addEventListener('DOMContentLoaded', () => {
+            // 预加载音频上下文
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        });
+
+        // 键盘控制
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'Enter') {
+                if (gameScreen.classList.contains('active') && !choicesContainer.classList.contains('active')) {
+                    advanceDialog();
+                }
+            }
+        });
+
+        // 触摸优化
+        let touchStartY = 0;
+        document.addEventListener('touchstart', (e) => {
+            touchStartY = e.touches[0].clientY;
+        }, { passive: true });
+
+        document.addEventListener('touchend', (e) => {
+            const touchEndY = e.changedTouches[0].clientY;
+            if (touchEndY - touchStartY < -50) {
+                // 上滑
+                if (gameScreen.classList.contains('active') && !choicesContainer.classList.contains('active')) {
+                    advanceDialog();
+                }
+            }
+        }, { passive: true });
+    </script>
+</body>
+</html>

@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🔥 2023网络热梗互动玩具库 🔥</title>
+<style>
+:root {
+  --bg: #0a0a1a;
+  --card-bg: #12122a;
+  --neon-pink: #ff2d95;
+  --neon-cyan: #00f0ff;
+  --neon-yellow: #ffe600;
+  --neon-green: #39ff14;
+  --neon-purple: #b026ff;
+  --neon-orange: #ff6a00;
+  --text: #e0e0ff;
+  --glow-pink: 0 0 20px rgba(255,45,149,0.6), 0 0 40px rgba(255,45,149,0.3);
+  --glow-cyan: 0 0 20px rgba(0,240,255,0.6), 0 0 40px rgba(0,240,255,0.3);
+  --glow-yellow: 0 0 20px rgba(255,230,0,0.6), 0 0 40px rgba(255,230,0,0.3);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  cursor: default;
+}
+
+/* 背景粒子 */
+#particles-canvas {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* 头部 */
+header {
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  padding: 40px 20px 30px;
+  background: linear-gradient(180deg, rgba(10,10,26,0.95) 0%, transparent 100%);
+}
+
+header h1 {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  background: linear-gradient(135deg, var(--neon-pink), var(--neon-cyan), var(--neon-yellow), var(--neon-green));
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientShift 4s ease infinite;
+  text-shadow: none;
+  filter: drop-shadow(0 0 30px rgba(255,45,149,0.4));
+  letter-spacing: 2px;
+}
+
+header p {
+  font-size: 1.1rem;
+  color: #aaa;
+  margin-top: 10px;
+  animation: fadeInUp 0.8s ease;
+}
+
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 控制栏 */
+.controls {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  flex-wrap: wrap;
+  padding: 10px 20px 30px;
+}
+
+.controls button {
+  padding: 12px 28px;
+  border: 2px solid var(--neon-cyan);
+  background: rgba(0,240,255,0.08);
+  color: var(--neon-cyan);
+  font-size: 1rem;
+  font-weight: 700;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.controls button:hover {
+  background: var(--neon-cyan);
+  color: #000;
+  box-shadow: var(--glow-cyan);
+  transform: translateY(-2px);
+}
+
+.controls button.active {
+  background: var(--neon-pink);
+  border-color: var(--neon-pink);
+  color: #fff;
+  box-shadow: var(--glow-pink);
+}
+
+/* 卡片网格 */
+.meme-grid {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 28px;
+  padding: 10px 30px 60px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* 卡片 */
+.meme-card {
+  background: var(--card-bg);
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.06);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  cursor: pointer;
+  position: relative;
+  animation: fadeInUp 0.6s ease backwards;
+}
+
+.meme-card:nth-child(1) { animation-delay: 0.05s; }
+.meme-card:nth-child(2) { animation-delay: 0.1s; }
+.meme-card:nth-child(3) { animation-delay: 0.15s; }
+.meme-card:nth-child(4) { animation-delay: 0.2s; }
+.meme-card:nth-child(5) { animation-delay: 0.25s; }
+.meme-card:nth-child(6) { animation-delay: 0.3s; }
+.meme-card:nth-child(7) { animation-delay: 0.35s; }
+.meme-card:nth-child(8) { animation-delay: 0.4s; }
+.meme-card:nth-child(9) { animation-delay: 0.45s; }
+.meme-card:nth-child(10) { animation-delay: 0.5s; }
+
+.meme-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  border-color: rgba(255,255,255,0.15);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+.meme-card.playing {
+  border-color: var(--neon-green);
+  box-shadow: 0 0 30px rgba(57,255,20,0.3), 0 20px 60px rgba(0,0,0,0.5);
+}
+
+/* 卡片顶部 */
+.card-header {
+  padding: 20px 20px 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.card-number {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 900;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.card-title {
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.card-tag {
+  margin-left: auto;
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.06);
+  color: #999;
+}
+
+/* 表情包区域 */
+.meme-emoji-area {
+  padding: 20px;
+  text-align: center;
+  font-size: 4rem;
+  line-height: 1.2;
+  position: relative;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.meme-emoji-area .emoji-bounce {
+  display: inline-block;
+  animation: emojiBounce 1.5s ease-in-out infinite;
+}
+
+.meme-emoji-area .emoji-bounce:nth-child(2) { animation-delay: 0.2s; }
+.meme-emoji-area .emoji-bounce:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes emojiBounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-12px) scale(1.1); }
+}
+
+.meme-card.playing .emoji-bounce {
+  animation: emojiDance 0.5s ease-in-out infinite;
+}
+
+@keyframes emojiDance {
+  0%, 100% { transform: translateY(0) rotate(0deg) scale(1.1); }
+  25% { transform: translateY(-15px) rotate(-5deg) scale(1.2); }
+  75% { transform: translateY(-8px) rotate(5deg) scale(1.15); }
+}
+
+/* 音频可视化条 */
+.audio-bars {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 3px;
+  height: 30px;
+  padding: 0 20px 10px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.meme-card.playing .audio-bars { opacity: 1; }
+
+.audio-bar {
+  width: 4px;
+  background: var(--neon-green);
+  border-radius: 2px;
+  transition: height 0.1s ease;
+}
+
+/* 播放按钮 */
+.play-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px 20px 15px;
+  padding: 12px;
+  border: 2px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.03);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.play-btn:hover {
+  border-color: var(--neon-pink);
+  background: rgba(255,45,149,0.1);
+  box-shadow: 0 0 20px rgba(255,45,149,0.2);
+}
+
+.play-btn.playing-state {
+  border-color: var(--neon-green);
+  background: rgba(57,255,20,0.1);
+  box-shadow: 0 0 20px rgba(57,255,20,0.2);
+}
+
+.play-icon {
+  font-size: 1.2rem;
+}
+
+/* 故事文案 */
+.card-story {
+  padding: 0 20px 15px;
+  font-size: 0.88rem;
+  line-height: 1.7;
+  color: #aaa;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.5s ease, padding 0.3s ease;
+}
+
+.meme-card.expanded .card-story {
+  max-height: 300px;
+  padding-bottom: 15px;
+}
+
+/* 视频链接 */
+.card-video-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  margin: 0 20px 15px;
+  border-radius: 12px;
+  background: rgba(255,106,0,0.08);
+  border: 1px solid rgba(255,106,0,0.2);
+  color: var(--neon-orange);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.card-video-link:hover {
+  background: rgba(255,106,0,0.15);
+  border-color: var(--neon-orange);
+  box-shadow: 0 0 20px rgba(255,106,0,0.15);
+  transform: translateX(4px);
+}
+
+/* 展开指示器 */
+.expand-hint {
+  text-align: center;
+  padding: 8px;
+  font-size: 0.75rem;
+  color: #555;
+  transition: all 0.3s;
+}
+
+.meme-card.expanded .expand-hint {
+  color: var(--neon-cyan);
+}
+
+/* 随机结果弹窗 */
+.random-popup {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  z-index: 1000;
+  background: var(--card-bg);
+  border: 2px solid var(--neon-pink);
+  border-radius: 24px;
+  padding: 40px 50px;
+  text-align: center;
+  box-shadow: 0 0 60px rgba(255,45,149,0.5), 0 30px 80px rgba(0,0,0,0.7);
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  pointer-events: none;
+}
+
+.random-popup.show {
+  transform: translate(-50%, -50%) scale(1);
+  pointer-events: all;
+}
+
+.random-popup h2 {
+  font-size: 2rem;
+  margin-bottom: 10px;
+  background: linear-gradient(135deg, var(--neon-pink), var(--neon-yellow));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.random-popup .big-emoji {
+  font-size: 5rem;
+  margin: 15px 0;
+  animation: emojiBounce 1s ease-in-out infinite;
+}
+
+.random-popup button {
+  margin-top: 15px;
+  padding: 10px 30px;
+  border: 2px solid var(--neon-cyan);
+  background: transparent;
+  color: var(--neon-cyan);
+  border-radius: 30px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: all 0.3s;
+}
+
+.random-popup button:hover {
+  background: var(--neon-cyan);
+  color: #000;
+}
+
+/* 遮罩 */
+.overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6);
+  z-index: 999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+.overlay.show {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* 底部 */
+footer {
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  padding: 30px 20px;
+  color: #444;
+  font-size: 0.8rem;
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .meme-grid {
+    grid-template-columns: 1fr;
+    padding: 10px 15px 40px;
+    gap: 20px;
+  }
+  header { padding: 25px 15px 20px; }
+  .controls { gap: 10px; padding: 10px 15px 20px; }
+  .controls button { padding: 10px 20px; font-size: 0.85rem; }
+  .random-popup { padding: 30px 25px; margin: 0 15px; }
+  .random-popup .big-emoji { font-size: 3.5rem; }
+}
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--neon-pink); border-radius: 3px; }
+
+/* 键盘提示 */
+.keyboard-hint {
+  position: fixed;
+  bottom: 20px; right: 20px;
+  z-index: 50;
+  background: rgba(18,18,42,0.9);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 0.75rem;
+  color: #666;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s;
+}
+
+.keyboard-hint:hover { border-color: var(--neon-cyan); color: var(--neon-cyan); }
+
+@media (max-width: 768px) {
+  .keyboard-hint { display: none; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="particles-canvas"></canvas>
+
+<header>
+  <h1>🔥 2023 网络热梗互动玩具库 🔥</h1>
+  <p>点击卡片播放音效 · 展开查看背后故事 · 探索二创视频</p>
+</header>
+
+<div class="controls">
+  <button onclick="playRandom()">🎲 随机热梗</button>
+  <button onclick="expandAll()">📖 全部展开</button>
+  <button onclick="collapseAll()">📕 全部收起</button>
+  <button onclick="stopAll()">⏹ 停止播放</button>
+</div>
+
+<div class="meme-grid" id="memeGrid"></div>
+
+<div class="overlay" id="overlay" onclick="closeRandom()"></div>
+<div class="random-popup" id="randomPopup">
+  <h2>🎰 今日热梗</h2>
+  <div class="big-emoji" id="randomEmoji"></div>
+  <p id="randomName"></p>
+  <button onclick="closeRandom()">关闭</button>
+  <br>
+  <button onclick="playRandomAndClose()" style="margin-top:10px;">▶ 播放音效</button>
+</div>
+
+<div class="keyboard-hint">
+  ⌨️ 按数字键 <b>1-0</b> 快速播放热梗 | <b>R</b> 随机 | <b>Space</b> 停止
+</div>
+
+<footer>
+  📌 素材说明：表情包使用Emoji + CSS动画模拟 | 音效使用Web Audio API合成 | 文案原创撰写 | 视频链接指向YouTube搜索
+</footer>
+
+<script>
+// ==================== 热梗数据 ====================
+const memes = [
+  {
+    id: 1,
+    name: "哈基米",
+    tag: "洗脑神曲",
+    color: "#ffe600",
+    emoji: ["🐱", "🍯", "🎵"],
+    story: "「哈基米南北路多」——源自日本动漫《赛马娘》角色曲的空耳歌词，2023年席卷全网。那只蓝色小猫哼唱的魔性旋律，成为无数短视频的BGM标配，洗脑程度堪称年度第一。从萌宠视频到美食制作，无处不在的哈基米让人听一遍就忘不掉。",
+    videoQuery: "哈基米+洗脑+二创",
+    soundType: "hakimi"
+  },
+  {
+    id: 2,
+    name: "恐龙扛狼",
+    tag: "魔性BGM",
+    color: "#39ff14",
+    emoji: ["🦖", "🐺", "🎶"],
+    story: "「恐龙扛狼扛狼扛」——一首来自云南彝族民歌的网络神曲，凭借其荒诞又上头的旋律火遍全网。恐龙为什么要扛狼？没有人知道，但所有人都在跟着唱。从直播间到学校课间，这首曲子的传染力堪称病毒级别。",
+    videoQuery: "恐龙扛狼+魔性+二创",
+    soundType: "dino"
+  },
+  {
+    id: 3,
+    name: "CPU / KTV / PUA",
+    tag: "精神控制",
+    color: "#ff2d95",
+    emoji: ["🧠", "💼", "🔄"],
+    story: "「你CPU我？」「你KTV我？」「你PUA我？」——2023年职场黑话三件套。CPU（原指中央处理器）被戏称为"精神洗脑"的代名词，KTV和PUA紧随其后，组成了一套完整的精神控制词汇体系，打工人看了直呼内行。",
+    videoQuery: "CPU+KTV+PUA+职场+二创",
+    soundType: "cpu"
+  },
+  {
+    id: 4,
+    name: "尊嘟假嘟",
+    tag: "可爱质疑",
+    color: "#b026ff",
+    emoji: ["🦊", "❓", "🤔"],
+    story: "「尊嘟假嘟？」——意思是"真的假的？"，因博主@伯恩山发的可爱狗狗视频而爆火。用嘟嘴卖萌的方式表达质疑，既俏皮又可爱。这句话迅速成为年轻人之间表达惊讶和怀疑的口头禅，连官方账号都忍不住玩梗。",
+    videoQuery: "尊嘟假嘟+狗狗+可爱+二创",
+    soundType: "zundu"
+  },
+  {
+    id: 5,
+    name: "泰裤辣",
+    tag: "自信宣言",
+    color: "#ff6a00",
+    emoji: ["🕶️", "🔥", "👖"],
+    story: "「泰裤辣！」——papi酱创造的"太酷啦"谐音梗，表达极度自信和酷炫的态度。配上墨镜一戴，谁都不爱的表情，瞬间成为2023年最霸气的口头禅。无论做什么，只要说一句"泰裤辣"，气场瞬间两米八。",
+    videoQuery: "泰裤辣+papi酱+二创",
+    soundType: "taykulat"
+  },
+  {
+    id: 6,
+    name: "挖呀挖呀挖",
+    tag: "全民翻唱",
+    color: "#00f0ff",
+    emoji: ["⛏️", "🌱", "🎤"],
+    story: "「在小小的花园里面挖呀挖呀挖」——幼儿园老师@黄老师的一首儿歌教学视频，意外引爆全网。从打工人版到太空版，全民翻唱热潮持续数月。这首简单的儿歌以惊人的传播力，成为2023年最治愈的声音。",
+    videoQuery: "挖呀挖呀挖+翻唱+二创",
+    soundType: "wawawa"
+  },
+  {
+    id: 7,
+    name: "命运的齿轮开始转动",
+    tag: "人生叙事",
+    color: "#ffe600",
+    emoji: ["⚙️", "🔄", "✨"],
+    story: "「命运的齿轮开始转动」——用来描述人生中某个看似微小的瞬间，却引发了后续一系列重大变化的叙事方式。从逆袭故事到搞笑回忆，这个梗完美诠释了"蝴蝶效应"的互联网版本，每个人都能讲出自己的版本。",
+    videoQuery: "命运的齿轮开始转动+逆袭+二创",
+    soundType: "gear"
+  },
+  {
+    id: 8,
+    name: "你这个老六",
+    tag: "游戏黑话",
+    color: "#39ff14",
+    emoji: ["🕵️", "😏", "🎮"],
+    story: "「你这个老六」——源自CS:GO等FPS游戏的黑话，指不按套路出牌、喜欢阴人的玩家。2023年这个词彻底出圈，用来形容任何"出其不意"的行为。从游戏圈到日常生活，"老六"成为年度最扎心的称呼之一。",
+    videoQuery: "你这个老六+搞笑+二创",
+    soundType: "laoliu"
+  },
+  {
+    id: 9,
+    name: "遥遥领先",
+    tag: "自信宣言",
+    color: "#ff2d95",
+    emoji: ["🚀", "🏆", "💪"],
+    story: "「遥遥领先」——源自华为发布会的一句宣传词，迅速成为网络热梗。用来形容某事物在某方面具有压倒性优势，带有强烈的自信和骄傲感。从科技圈到日常吹牛，这四个字自带BGM效果，说出来就气势如虹。",
+    videoQuery: "遥遥领先+华为+二创",
+    soundType: "yaoyao"
+  },
+  {
+    id: 10,
+    name: "泼天的富贵",
+    tag: "机遇降临",
+    color: "#b026ff",
+    emoji: ["🌊", "💰", "🎊"],
+    story: "「泼天的富贵」——形容突然降临的巨大机遇或财富，像一盆富贵之水从天而降泼到你头上。这个梗在2023年末爆火，成为新年许愿的热门词汇。网友们纷纷许愿"让泼天的富贵轮到我"，充满对美好生活的向往。",
+    videoQuery: "泼天的富贵+许愿+二创",
+    soundType: "potian"
+  }
+];
+
+// ==================== 音频引擎 ====================
+let audioCtx = null;
+let activeOscillators = [];
+
+function getAudioContext() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  return audioCtx;
+}
+
+function stopAllSounds() {
+  activeOscillators.forEach(item => {
+    try { item.stop(); } catch(e) {}
+  });
+  activeOscillators = [];
+  document.querySelectorAll('.meme-card.playing').forEach(c => c.classList.remove('playing'));
+  document.querySelectorAll('.play-btn.playing-state').forEach(b => {
+    b.classList.remove('playing-state');
+    b.querySelector('.play-icon').textContent = '▶';
+  });
+  // 重置音频条
+  document.querySelectorAll('.audio-bar').forEach(bar => bar.style.height = '4px');
+}
+
+function playMelody(notes, durations, type = 'sine', volume = 0.15) {
+  const ctx = getAudioContext();
+  let currentTime = ctx.currentTime;
+  
+  notes.forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, currentTime);
+    gain.gain.setValueAtTime(volume, currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, currentTime + durations[i]);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(currentTime);
+    osc.stop(currentTime + durations[i]);
+    activeOscillators.push(osc);
+    currentTime += durations[i] * 0.85;
+  });
+}
+
+function playSound(type) {
+  stopAllSounds();
+  const ctx = getAudioContext();
+  
+  switch(type) {
+    case 'hakimi':
+      // 哈基米旋律: G4 E4 E4 G4 E4 E4 G4 E4 G4 A4 G4...
+      playMelody([392,330,330,392,330,330,392,330,392,440,392,330,392,330], 
+                  [0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3,0.3], 'sine', 0.18);
+      break;
+    case 'dino':
+      // 恐龙扛狼: 有节奏的低音
+      playMelody([131,131,165,131,131,165,196,165,131,165], 
+                  [0.25,0.25,0.35,0.25,0.25,0.35,0.4,0.35,0.25,0.4], 'square', 0.12);
+      break;
+    case 'cpu':
+      // CPU: 循环洗脑感
+      playMelody([440,440,523,440,392,440,523,587,523,440,392,330], 
+                  [0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.3], 'sawtooth', 0.1);
+      break;
+    case 'zundu':
+      // 尊嘟假嘟: 可爱轻快
+      playMelody([523,587,659,587,523,587,659,784,659,587], 
+                  [0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.3,0.2,0.3], 'sine', 0.15);
+      break;
+    case 'taykulat':
+      // 泰裤辣: 酷炫有节奏
+      playMelody([330,392,494,392,330,392,494,587,494,392,330,262], 
+                  [0.2,0.2,0.3,0.2,0.2,0.2,0.2,0.3,0.2,0.2,0.2,0.4], 'square', 0.12);
+      break;
+    case 'wawawa':
+      // 挖呀挖: 简单重复
+      playMelody([523,587,523,587,659,587,523,587,523,587,659,784], 
+                  [0.25,0.25,0.25,0.25,0.3,0.25,0.25,0.25,0.25,0.25,0.3,0.5], 'sine', 0.16);
+      break;
+    case 'gear':
+      // 命运的齿轮: 史诗感
+      playMelody([262,330,392,523,392,330,262,330,392,523,659,523], 
+                  [0.3,0.3,0.3,0.5,0.3,0.3,0.3,0.3,0.3,0.4,0.3,0.6], 'triangle', 0.14);
+      break;
+    case 'laoliu':
+      // 老六: 搞笑
+      playMelody([440,330,440,523,440,330,262,330,440,523,659,523], 
+                  [0.2,0.2,0.2,0.3,0.2,0.2,0.2,0.2,0.2,0.2,0.2,0.4], 'square', 0.13);
+      break;
+    case 'yaoyao':
+      // 遥遥领先: 激昂
+      playMelody([392,440,523,659,523,440,392,440,523,659,784,659], 
+                  [0.2,0.2,0.2,0.4,0.2,0.2,0.2,0.2,0.2,0.3,0.2,0.5], 'sawtooth', 0.12);
+      break;
+    case 'potian':
+      // 泼天的富贵: 戏剧性
+      playMelody([330,392,494,659,784,659,494,392,330,392,494,659], 
+                  [0.25,0.25,0.25,0.4,0.3,0.25,0.25,0.25,0.25,0.25,0.25,0.5], 'triangle', 0.14);
+      break;
+  }
+}
+
+// ==================== 音频可视化动画 ====================
+function animateAudioBars(card) {
+  if (!card.classList.contains('playing')) return;
+  const bars = card.querySelectorAll('.audio-bar');
+  bars.forEach(bar => {
+    const h = Math.random() * 22 + 4;
+    bar.style.height = h + 'px';
+  });
+  if (card.classList.contains('playing')) {
+    requestAnimationFrame(() => animateAudioBars(card));
+  }
+}
+
+// ==================== 渲染卡片 ====================
+function renderCards() {
+  const grid = document.getElementById('memeGrid');
+  grid.innerHTML = memes.map((meme, index) => `
+    <div class="meme-card" id="card-${index}" onclick="toggleCard(${index})">
+      <div class="card-header">
+        <div class="card-number" style="background:${meme.color}22;color:${meme.color};border:2px solid ${meme.color}44;">
+          ${String(index + 1).padStart(2, '0')}
+        </div>
+        <div class="card-title" style="color:${meme.color}">${meme.name}</div>
+        <span class="card-tag">${meme.tag}</span>
+      </div>
+      <div class="meme-emoji-area">
+        ${meme.emoji.map((e, i) => `<span class="emoji-bounce">${e}</span>`).join('')}
+      </div>
+      <div class="audio-bars">
+        ${Array(12).fill(0).map(() => '<div class="audio-bar"></div>').join('')}
+      </div>
+      <button class="play-btn" onclick="event.stopPropagation();toggleSound(${index})">
+        <span class="play-icon">▶</span>
+        <span class="play-text">播放音效</span>
+      </button>
+      <div class="card-story">${meme.story}</div>
+      <a class="card-video-link" href="https://www.youtube.com/results?search_query=${encodeURIComponent(meme.videoQuery)}" target="_blank" onclick="event.stopPropagation()">
+        🎬 查看二创视频 →
+      </a>
+      <div class="expand-hint">▼ 点击展开故事</div>
+    </div>
+  `).join('');
+}
+
+// ==================== 交互逻辑 ====================
+function toggleCard(index) {
+  const card = document.getElementById('card-' + index);
+  card.classList.toggle('expanded');
+}
+
+function toggleSound(index) {
+  const card = document.getElementById('card-' + index);
+  const btn = card.querySelector('.play-btn');
+  const icon = btn.querySelector('.play-icon');
+  
+  if (card.classList.contains('playing')) {
+    stopAllSounds();
+  } else {
+    stopAllSounds();
+    card.classList.add('playing');
+    btn.classList.add('playing-state');
+    icon.textContent = '⏸';
+    playSound(memes[index].soundType);
+    animateAudioBars(card);
+    
+    // 自动收起播放状态（8秒后）
+    setTimeout(() => {
+      if (card.classList.contains('playing')) {
+        stopAllSounds();
+      }
+    }, 8000);
+  }
+}
+
+function expandAll() {
+  document.querySelectorAll('.meme-card').forEach(c => c.classList.add('expanded'));
+}
+
+function collapseAll() {
+  document.querySelectorAll('.meme-card').forEach(c => c.classList.remove('expanded'));
+}
+
+function stopAll() {
+  stopAllSounds();
+}
+
+// ==================== 随机热梗 ====================
+function playRandom() {
+  const idx = Math.floor(Math.random() * memes.length);
+  const meme = memes[idx];
+  document.getElementById('randomEmoji').textContent = meme.emoji.join('');
+  document.getElementById('randomName').textContent = meme.name + ' — ' + meme.tag;
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('randomPopup').classList.add('show');
+  // 滚动到对应卡片
+  const card = document.getElementById('card-' + idx);
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function playRandomAndClose() {
+  const name = document.getElementById('randomName').textContent.split(' — ')[0];
+  const idx = memes.findIndex(m => m.name === name);
+  if (idx >= 0) {
+    toggleSound(idx);
+  }
+  closeRandom();
+}
+
+function closeRandom() {
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('randomPopup').classList.remove('show');
+}
+
+// ==================== 键盘快捷键 ====================
+document.addEventListener('keydown', (e) => {
+  if (e.key >= '1' && e.key <= '9') {
+    toggleSound(parseInt(e.key) - 1);
+  } else if (e.key === '0') {
+    toggleSound(9);
+  } else if (e.key === 'r' || e.key === 'R') {
+    playRandom();
+  } else if (e.key === ' ') {
+    e.preventDefault();
+    stopAllSounds();
+  } else if (e.key === 'Escape') {
+    closeRandom();
+    stopAllSounds();
+  }
+});
+
+// ==================== 粒子背景 ====================
+const canvas = document.getElementById('particles-canvas');
+const ctx = canvas.getContext('2d');
+let particles = [];
+let mouseX = 0, mouseY = 0;
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+
+function createParticles() {
+  particles = [];
+  const count = Math.min(80, Math.floor(window.innerWidth / 15));
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      vx: (Math.random() - 0.5) * 0.5,
+      vy: (Math.random() - 0.5) * 0.5,
+      size: Math.random() * 2 + 1,
+      alpha: Math.random() * 0.5 + 0.1,
+      hue: Math.random() * 360
+    });
+  }
+}
+
+function animateParticles() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  particles.forEach(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.hue += 0.2;
+    
+    if (p.x < 0) p.x = canvas.width;
+    if (p.x > canvas.width) p.x = 0;
+    if (p.y < 0) p.y = canvas.height;
+    if (p.y > canvas.height) p.y = 0;
+    
+    // 鼠标引力
+    const dx = mouseX - p.x;
+    const dy = mouseY - p.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 200 && dist > 0) {
+      p.vx += dx / dist * 0.02;
+      p.vy += dy / dist * 0.02;
+    }
+    
+    // 速度限制
+    const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+    if (speed > 1.5) {
+      p.vx = (p.vx / speed) * 1.5;
+      p.vy = (p.vy / speed) * 1.5;
+    }
+    
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${p.hue}, 80%, 65%, ${p.alpha})`;
+    ctx.fill();
+  });
+  
+  // 连线
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i + 1; j < particles.length; j++) {
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 120) {
+        ctx.beginPath();
+        ctx.moveTo(particles[i].x, particles[i].y);
+        ctx.lineTo(particles[j].x, particles[j].y);
+        ctx.strokeStyle = `hsla(${(particles[i].hue + particles[j].hue) / 2}, 70%, 60%, ${0.15 * (1 - dist / 120)})`;
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+    }
+  }
+  
+  requestAnimationFrame(animateParticles);
+}
+
+document.addEventListener('mousemove', (e) => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+});
+
+window.addEventListener('resize', () => {
+  resizeCanvas();
+  createParticles();
+});
+
+// ==================== 初始化 ====================
+resizeCanvas();
+createParticles();
+animateParticles();
+renderCards();
+</script>
+</body>
+</html>

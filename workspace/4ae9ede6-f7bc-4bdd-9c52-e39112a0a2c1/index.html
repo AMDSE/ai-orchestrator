@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>B站热梗互动玩具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #ffecf0 0%, #ffe6f0 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* B站风格头部 */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(255, 105, 180, 0.15);
+        }
+
+        .bilibili-icon {
+            width: 60px;
+            height: 60px;
+            background: #fb7299;
+            border-radius: 12px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .bilibili-icon::before {
+            content: '';
+            width: 30px;
+            height: 20px;
+            background: white;
+            border-radius: 4px;
+        }
+
+        .bilibili-icon::after {
+            content: '';
+            position: absolute;
+            top: -8px;
+            width: 4px;
+            height: 12px;
+            background: white;
+            border-radius: 2px;
+            box-shadow: 10px 0 0 white;
+        }
+
+        .header h1 {
+            color: #fb7299;
+            font-size: 2.2rem;
+            font-weight: 700;
+        }
+
+        /* 热梗卡片区 */
+        .memes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .meme-card {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .meme-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(255, 105, 180, 0.2);
+        }
+
+        .meme-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+
+        .meme-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #222;
+        }
+
+        .meme-desc {
+            color: #666;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+
+        .meme-btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #fb7299 0%, #ff85a2 100%);
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .meme-btn:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        .meme-btn:active {
+            transform: scale(0.98);
+        }
+
+        /* 弹幕区域 */
+        .danmaku-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+            overflow: hidden;
+        }
+
+        .danmaku {
+            position: absolute;
+            white-space: nowrap;
+            font-size: 1.2rem;
+            font-weight: 600;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+            animation: danmaku-move 8s linear forwards;
+        }
+
+        @keyframes danmaku-move {
+            from {
+                transform: translateX(100vw);
+            }
+            to {
+                transform: translateX(-100%);
+            }
+        }
+
+        /* 统计面板 */
+        .stats-panel {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            margin-bottom: 30px;
+        }
+
+        .stats-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #fb7299;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .stat-item {
+            background: #fff5f7;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-count {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #fb7299;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        /* 底部 */
+        .footer {
+            text-align: center;
+            color: #999;
+            font-size: 0.9rem;
+            padding: 20px;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8rem;
+            }
+
+            .memes-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <div class="header">
+            <div class="bilibili-icon"></div>
+            <h1>🔥 B站热梗互动玩具</h1>
+        </div>
+
+        <!-- 热梗卡片区 -->
+        <div class="memes-grid" id="memesGrid">
+            <!-- 动态生成 -->
+        </div>
+
+        <!-- 统计面板 -->
+        <div class="stats-panel">
+            <div class="stats-title">📊 互动统计</div>
+            <div class="stats-grid" id="statsGrid">
+                <!-- 动态生成 -->
+            </div>
+        </div>
+
+        <!-- 底部 -->
+        <div class="footer">
+            <p>© 2024 B站热梗互动玩具 | 仅供娱乐学习使用</p>
+        </div>
+    </div>
+
+    <!-- 弹幕容器 -->
+    <div class="danmaku-container" id="danmakuContainer"></div>
+
+    <script>
+        // 热梗数据配置
+        const MEMES_DATA = [
+            {
+                id: 'tuotuo',
+                icon: '🧙♂️',
+                title: '退退退！',
+                desc: '大妈吵架必备技能，点击召唤退退退咒语！',
+                color: '#ff9f43',
+                danmakuList: ['退！退！退！', '退退退！', '魔法攻击！', '物理退散！', '大妈威武！'],
+                soundFreq: 220
+            },
+            {
+                id: 'xiexie',
+                icon: '🙏',
+                title: '听我说谢谢你',
+                desc: '感恩的心，点击表达感谢！',
+                color: '#54a0ff',
+                danmakuList: ['谢谢你！', '温暖了四季！', '听我说谢谢你', '感恩有你', '因为有你！'],
+                soundFreq: 330
+            },
+            {
+                id: 'shuanq',
+                icon: '😅',
+                title: '栓Q',
+                desc: '我真的栓Q，无语到极点！',
+                color: '#1dd1a1',
+                danmakuList: ['栓Q！', '我真的栓Q', '无语子', '救命啊', '笑不活了！'],
+                soundFreq: 440
+            },
+            {
+                id: 'yaoyao',
+                icon: '🚀',
+                title: '遥遥领先',
+                desc: '华为同款口号，点击感受震撼！',
+                color: '#ee5a24',
+                danmakuList: ['遥遥领先！', '时代楷模！', '中华有为！', '突破极限！', '震撼世界！'],
+                soundFreq: 550
+            },
+            {
+                id: 'potian',
+                icon: '💰',
+                title: '泼天的富贵',
+                desc: '终于轮到我了吧！点击接住富贵！',
+                color: '#9c88ff',
+                danmakuList: ['接住了！', '泼天的富贵！', '终于轮到我了！', '好运来！', '富贵逼人！'],
+                soundFreq: 660
+            }
+        ];
+
+        // 音频上下文
+        let audioContext = null;
+
+        // 初始化
+        function init() {
+            renderMemeCards();
+            renderStats();
+            setupAudio();
+        }
+
+        // 设置音频
+        function setupAudio() {
+            document.addEventListener('click', () => {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }, { once: true });
+        }
+
+        // 播放音效
+        function playSound(frequency) {
+            if (!audioContext) return;
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = frequency;
+            oscillator.type = 'sine';
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.3);
+        }
+
+        // 渲染热梗卡片
+        function renderMemeCards() {
+            const grid = document.getElementById('memesGrid');
+            grid.innerHTML = MEMES_DATA.map(meme => `
+                <div class="meme-card" data-id="${meme.id}">
+                    <div class="meme-icon">${meme.icon}</div>
+                    <div class="meme-title">${meme.title}</div>
+                    <div class="meme-desc">${meme.desc}</div>
+                    <button class="meme-btn" onclick="handleMemeClick('${meme.id}')">点击互动</button>
+                </div>
+            `).join('');
+        }
+
+        // 处理热梗点击
+        function handleMemeClick(memeId) {
+            const meme = MEMES_DATA.find(m => m.id === memeId);
+            if (!meme) return;
+
+            // 更新统计
+            updateStats(memeId);
+            
+            // 播放音效
+            playSound(meme.soundFreq);
+            
+            // 生成弹幕
+            generateDanmaku(meme);
+            
+            // 按钮动画
+            const btn = document.querySelector(`[data-id="${memeId}"] .meme-btn`);
+            btn.style.transform = 'scale(0.95)';
+            setTimeout(() => {
+                btn.style.transform = '';
+            }, 150);
+        }
+
+        // 更新统计
+        function updateStats(memeId) {
+            let stats = JSON.parse(localStorage.getItem('memeStats') || '{}');
+            stats[memeId] = (stats[memeId] || 0) + 1;
+            localStorage.setItem('memeStats', JSON.stringify(stats));
+            renderStats();
+        }
+
+        // 渲染统计
+        function renderStats() {
+            const stats = JSON.parse(localStorage.getItem('memeStats') || '{}');
+            const grid = document.getElementById('statsGrid');
+            
+            grid.innerHTML = MEMES_DATA.map(meme => `
+                <div class="stat-item">
+                    <div class="stat-count">${stats[meme.id] || 0}</div>
+                    <div class="stat-label">${meme.title}</div>
+                </div>
+            `).join('');
+        }
+
+        // 生成弹幕
+        function generateDanmaku(meme) {
+            const container = document.getElementById('danmakuContainer');
+            const danmakuCount = 3 + Math.floor(Math.random() * 3); // 3-5条弹幕
+            
+            for (let i = 0; i < danmakuCount; i++) {
+                setTimeout(() => {
+                    const danmaku = document.createElement('div');
+                    danmaku.className = 'danmaku';
+                    danmaku.textContent = meme.danmakuList[Math.floor(Math.random() * meme.danmakuList.length)];
+                    danmaku.style.color = meme.color;
+                    danmaku.style.top = `${10 + Math.random() * 80}%`;
+                    danmaku.style.animationDuration = `${6 + Math.random() * 4}s`;
+                    
+                    container.appendChild(danmaku);
+                    
+                    // 动画结束后移除
+                    setTimeout(() => {
+                        danmaku.remove();
+                    }, 10000);
+                }, i * 200);
+            }
+        }
+
+        // 页面加载完成后初始化
+        window.onload = init;
+    </script>
+</body>
+</html>
