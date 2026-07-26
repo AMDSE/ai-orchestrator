@@ -1,5 +1,6 @@
 node_modules/
 .env
 userdata/
+workspace/
 .DS_Store
 *.log
