@@ -1006,3 +1006,172 @@ textarea::placeholder { color: var(--text-muted); }
   .projects-grid { grid-template-columns: 1fr; }
   .model-badges { display: none; }
 }
+
+/* ── 🔮 技能炼化面板 (Skill Alchemy Panel) ── */
+.skill-alchemy-panel {
+  margin-bottom: 12px;
+  background: rgba(184, 127, 255, 0.04);
+  border: 1px solid rgba(184, 127, 255, 0.2);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+.skill-alchemy-panel:hover {
+  border-color: rgba(184, 127, 255, 0.4);
+}
+.alchemy-toggle-header {
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  background: rgba(184, 127, 255, 0.08);
+  user-select: none;
+}
+.alchemy-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--accent-purple);
+}
+.alchemy-badge-icon {
+  font-size: 1.1rem;
+}
+.alchemy-arrow {
+  font-size: 0.7rem;
+  color: var(--accent-purple);
+  transition: transform 0.3s ease;
+}
+.alchemy-arrow.open {
+  transform: rotate(180deg);
+}
+.alchemy-body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.2);
+}
+.alchemy-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.alchemy-input-group label {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.alchemy-input-group textarea,
+.alchemy-input-group input[type="text"] {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.76rem;
+  outline: none;
+  resize: vertical;
+}
+.alchemy-input-group textarea:focus,
+.alchemy-input-group input[type="text"]:focus {
+  border-color: var(--accent-purple);
+  background: rgba(184, 127, 255, 0.05);
+}
+.alchemy-presets {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.preset-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.btn-preset {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-preset:hover {
+  background: rgba(184, 127, 255, 0.2);
+  border-color: var(--accent-purple);
+  color: var(--accent-purple);
+}
+.btn-alchemy-run {
+  width: 100%;
+  padding: 9px 14px;
+  background: linear-gradient(135deg, rgba(184, 127, 255, 0.8), rgba(79, 142, 247, 0.8));
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(184, 127, 255, 0.2);
+}
+.btn-alchemy-run:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(184, 127, 255, 0.35);
+  filter: brightness(1.1);
+}
+.btn-alchemy-run:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+.alchemy-spark {
+  animation: pulseSpark 1.5s infinite alternate;
+}
+@keyframes pulseSpark {
+  from { transform: scale(1); opacity: 0.8; }
+  to { transform: scale(1.3); opacity: 1; }
+}
+.alchemy-status-box {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(184, 127, 255, 0.3);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  font-size: 0.75rem;
+}
+.alchemy-stage-indicator {
+  color: var(--accent-yellow);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.spinner-small {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 209, 102, 0.3);
+  border-top-color: var(--accent-yellow);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+}
+.alchemy-stream-output {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: rgba(232, 234, 240, 0.85);
+  max-height: 120px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+

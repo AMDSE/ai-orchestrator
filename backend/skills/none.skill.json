@@ -1,0 +1,13 @@
+{
+  "id": "none",
+  "name": "⚪ 无特定技能框架",
+  "icon": "⚪",
+  "description": "自由编码模式，不加载特定平台技能规范。",
+  "version": "1.0.0",
+  "targetPlatform": "通用",
+  "builtIn": true,
+  "sourceDocs": [],
+  "systemPrompt": "",
+  "qualityRules": [],
+  "forbiddenPatterns": []
+}

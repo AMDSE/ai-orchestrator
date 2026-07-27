@@ -51,7 +51,20 @@
 
 ---
 
-## 🛠️ 项目技能 (Project Skills) 开发与扩展教程
+## 🔮 技能炼化 (Skill Alchemy) 与动态技能库
+
+系统内置了全新的 **技能炼化 (Skill Alchemy)** 引擎，可直接从互联网官方信源抓取技术规范，并通过策略脑提炼生成定制化的 Project Skill，最后热更新注册到技能栏中：
+
+1. **零安装爬虫**：默认内置 `Jina Reader` API (`r.jina.ai`) 抓取任意 URL 转换为 Markdown，支持 GitHub Raw 仓库抓取，可扩展 `Crawlee` (npm)。
+2. **炼化 Pipeline**：策略脑自动抽取规范中的：
+   - 核心 System Prompt（代码生成硬约束）
+   - 质量校验规则 (`qualityRules`)
+   - 绝对禁止项 (`forbiddenPatterns`)
+3. **热加载与存储**：炼化产物自动保存为 `backend/skills/{skillId}.skill.json`，无需重启服务，全端 WebSocket 实时刷出新技能项。
+
+---
+
+## 🎯 内置与炼化技能规范开发与扩展教程
 
 系统支持开发者自定义与扩展【项目技能 (Project Skills)】。下面详细说明项目技能的架构以及如何新建/扩充一项新的项目技能。
 

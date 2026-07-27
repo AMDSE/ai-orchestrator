@@ -1,0 +1,28 @@
+{
+  "id": "bili_toy",
+  "name": "🎮 B站 Toy 互动规范",
+  "icon": "🎮",
+  "description": "包含：相对路径 ./assets/、Data URL/SVG 防白屏保障、无阻断直接可玩、B站 Toy 标准打包结构。",
+  "version": "1.2.0",
+  "targetPlatform": "bilibili Toy H5",
+  "builtIn": true,
+  "sourceDocs": [
+    "https://www.bilibili.com/toy/publish/sdk",
+    "https://www.bilibili.com/toy/toy-new-up-guide/index.html"
+  ],
+  "systemPrompt": "【🎮 bilibili Toy 平台交互规范技能（已启用）】\n1. 所有图片/样式/静态资源必须采用相对路径引用（如 ./assets/chara.png 或 assets/chara.png），严禁使用绝对路径（如 /assets/）。\n2. 保底防白屏机制：页面内必须包含内嵌 SVG 或 Data URL 备用资源，确保离开在线 CDN 也能流畅运行。\n3. 代码结构符合 B端 Toy 打包与发布规范，必须可在最外层通过 index.html 打开。\n4. 角色立绘强制使用内嵌 SVG 矢量绘图，或通过 https://api.dicebear.com/7.x/anime/svg?seed=角色名 加载。",
+  "qualityRules": [
+    "所有静态资源使用 ./assets/ 相对路径",
+    "必须包含 inline SVG 或 Data URL 防白屏保底",
+    "代码结构根目录有 index.html 可直接打开",
+    "角色/图片使用 SVG 或 DiceBear，不使用外部图片 URL"
+  ],
+  "forbiddenPatterns": [
+    "dummyimage.com",
+    "placeholder.com",
+    "placehold.it",
+    "/assets/ (绝对路径前缀)",
+    "login gate",
+    "身份验证阻断"
+  ]
+}

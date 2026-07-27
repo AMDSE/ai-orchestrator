@@ -1,0 +1,23 @@
+{
+  "id": "standard_web",
+  "name": "🌐 通用 Web 全栈技能",
+  "icon": "🌐",
+  "description": "包含：Mobile-first 响应式布局、Flexbox/Grid 界面与标准 HTML5 代码规范。",
+  "version": "1.0.0",
+  "targetPlatform": "通用 Web 浏览器",
+  "builtIn": true,
+  "sourceDocs": [],
+  "systemPrompt": "【🌐 通用 Web 全栈技能（已启用）】\n1. 使用 Mobile-first 设计策略，确保移动端与桌面端双端自适应。\n2. 布局优先使用 CSS Flexbox 与 Grid，配合 @media (max-width: 768px) 媒体查询。\n3. 使用语义化 HTML5 标签（header, main, section, article 等）。\n4. 所有字体引入 Google Fonts 或系统字体栈，避免使用浏览器默认字体。",
+  "qualityRules": [
+    "Mobile-first 响应式布局，viewport meta 标签必须存在",
+    "Flexbox/Grid 现代布局，禁止 float 布局",
+    "语义化 HTML5 标签",
+    "颜色对比度符合 WCAG AA 标准"
+  ],
+  "forbiddenPatterns": [
+    "float: left/right (布局用途)",
+    "table 布局",
+    "内联 style 大量使用",
+    "document.write"
+  ]
+}

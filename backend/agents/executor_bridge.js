@@ -1,11 +1,12 @@
 // backend/agents/executor_bridge.js
-// 执行脑桥接器 v5：支持真实拉起 Antigravity Agent/CLI、Python SDK 和 外接自定义 API (OpenAI 兼容)
+// 执行脑桥接器 v6：集成 SkillRegistry 动态技能注入，支持炼化技能实时生效
 
 import { spawn, execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import OpenAI from 'openai';
+import { skillRegistry } from '../skill-registry.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -112,15 +113,11 @@ function executeViaPythonSdk(taskData, onToken) {
 // 跟踪已为哪些项目拉起过独占 IDE 窗口，防止后续任务/迭代反复弹窗
 const launchedProjectWindows = new Set();
 
-/**
- * 遵守 Google Antigravity CLI 官方规范：使用临时 UTF-8 文件无损传输多行 Prompt，全异步非阻塞开辟独占窗口与 Agent 会话
- */
 function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = null) {
   return new Promise((resolve, reject) => {
     const cli = getAntigravityCliPath();
     const isFirstLaunch = !launchedProjectWindows.has(projectId);
 
-    // 1. 将完整的任务 Prompt 写入工作区临时文件，彻底避免 PowerShell 命令行转义截断与语法报错
     const promptFilePath = path.join(workspaceDir, `.temp_prompt_${Date.now()}.txt`);
     try {
       fs.writeFileSync(promptFilePath, prompt, 'utf-8');
@@ -133,7 +130,6 @@ function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = nul
     };
 
     const sendChatPrompt = () => {
-      // 2. PowerShell 使用 Get-Content -Raw -Encoding UTF8 无损读取 Prompt 文件
       const psChatCmd = `$p = Get-Content -Path '${promptFilePath.replace(/'/g, "''")}' -Raw -Encoding UTF8; & '${cli}' chat -r -m agent $p`;
       const chatProc = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-Command', psChatCmd], {
         stdio: ['ignore', 'pipe', 'pipe']
@@ -152,10 +148,7 @@ function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = nul
 
       chatProc.on('close', (code) => {
         cleanupTempFile();
-        resolve({
-          type: 'task_complete',
-          output: output.trim()
-        });
+        resolve({ type: 'task_complete', output: output.trim() });
       });
 
       chatProc.on('error', (err) => {
@@ -174,7 +167,6 @@ function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = nul
       launchedProjectWindows.add(projectId);
       console.log(`🚀 首次为项目 [${projectId}] 唤醒独占 IDE 窗口 (工作区: ${workspaceDir}): ${cli}`);
 
-      // 阶段一：首次唤醒项目独占视窗 (--disable-workspace-trust -n workspaceDir)
       const psOpenCmd = `& '${cli}' --disable-workspace-trust -n '${workspaceDir}'`;
       const openProc = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-Command', psOpenCmd], {
         stdio: ['ignore', 'pipe', 'pipe']
@@ -243,18 +235,18 @@ async function executeViaCustomApi(taskData, executorConfig, onToken = null) {
 }
 
 /**
- * 主执行入口 (具备工作区文件真实写入与双轨防假完成保护)
+ * 主执行入口
  */
 export async function executeTask(taskData, defaultOpenaiClient, onToken = null) {
   const executorConfig = taskData.executorConfig || {};
   const provider = executorConfig.provider || 'antigravity';
   const projectId = taskData.projectId || 'default';
 
-  // 1. 创建该项目的专属工作区目录
+  // 创建该项目的专属工作区目录
   const workspaceDir = path.join(__dirname, '..', '..', 'workspace', projectId);
   try { fs.mkdirSync(workspaceDir, { recursive: true }); } catch (e) {}
 
-  // 2. 若配置为外接自定义 API
+  // 若配置为外接自定义 API
   if (provider === 'custom_api' && executorConfig.apiKey) {
     const result = await executeViaCustomApi(taskData, executorConfig, onToken);
     if (result.type === 'task_complete' && result.output) {
@@ -263,7 +255,7 @@ export async function executeTask(taskData, defaultOpenaiClient, onToken = null)
     return result;
   }
 
-  // 3. 若配置为 Antigravity 本地 Agent 模式
+  // Antigravity 本地 Agent 模式
   const model = executorConfig.model || taskData.model || 'gemini-3.6-flash';
   taskData.model = model;
 
@@ -277,33 +269,20 @@ export async function executeTask(taskData, defaultOpenaiClient, onToken = null)
   if (hasCli) {
     console.log(`⚡ 唤醒项目 [${projectId}] 独占的 Antigravity IDE 窗口并切入工作区: ${workspaceDir}`);
     try {
-      // 唤醒 Antigravity 界面并将工作区与 Session 绑定当前独占项目目录
       executeViaAntigravityCli(prompt, workspaceDir, projectId, null).catch(err => console.warn('[CLI Call Warning]', err.message));
     } catch (e) {
       console.warn(`[Antigravity CLI 唤醒提示]: ${e.message}`);
     }
   }
 
-  // 4. 无论是否唤醒 GUI，必须通过模型生成全量实体 HTML5 代码并写入工作区（彻底杜绝“假完成”）
+  // 后台并发通过模型生成全量代码并写入工作区
   console.log(`💻 后台并发构建全量实体 HTML5 项目文件...`);
   const stream = await defaultOpenaiClient.chat.completions.create({
     model: process.env.LONGCAT_MODEL || 'LongCat-2.0',
     messages: [
       {
         role: 'system',
-        content: `你是一个顶级全栈 Web 开发工程师与项目执行脑。你的联网检索功能已开启！
-
-【绝对禁止事项 - 违反则视为任务失败】
-❌ 禁止：在任何游戏或应用中加入登录门禁、身份验证、账号绑定等阻断用户进入主功能的流程。游戏启动必须直接可玩，无需登录。
-❌ 禁止：使用 dummyimage.com、placeholder.com、placehold.it 或任何测试性占位图片服务。
-❌ 禁止：在代码中引用本地不存在的图片路径（如 dog.png、cat.png），必须用内嵌 SVG 或 DiceBear API 替代。
-❌ 禁止：输出纯文字描述或注释性内容，必须直接输出完整立即可运行的单文件 HTML5 代码（包含 <!DOCTYPE html>、<head>、<style>、<body> 与 <script>）。
-❌ 禁止：在页面中保留任何调试文本、测试按钮、占位符内容。
-
-【强制质量标准】
-✅ 若制作 Galgame/视觉小说：必须包含≥50条对话节点、≥3个分支路线、≥2个不同结局，角色立绘用内嵌 SVG 绘制。
-✅ 所有 Web 页面必须 mobile-first 双端适配（viewport meta + @media 媒体查询）。
-若遇到歧义，可用 [QUESTION_TO_PLANNER]提问[/QUESTION_TO_PLANNER]`
+        content: buildExecutorSystemPrompt(taskData.selectedSkill || 'bili_toy')
       },
       { role: 'user', content: prompt }
     ],
@@ -326,15 +305,13 @@ export async function executeTask(taskData, defaultOpenaiClient, onToken = null)
     return { type: 'question', question: match ? match[1].trim() : rawOutput };
   }
 
-  // 自动将生成的 HTML 代码保存至工作区 index.html
   _saveToWorkspace(workspaceDir, rawOutput);
-
   return { type: 'task_complete', output: rawOutput };
 }
 
 function _saveToWorkspace(workspaceDir, codeText) {
   try {
-    const htmlMatch = codeText.match(/(<!DOCTYPE html>[\s\S]*<\/html>)/i);
+    const htmlMatch = codeText.match(/(<![Dd][Oo][Cc][Tt][Yy][Pp][Ee] html>[\s\S]*<\/html>)/i);
     const codeBlockMatch = codeText.match(/```([a-zA-Z0-9_-]+)?\s*([\s\S]*?)```/);
 
     let content = codeText;
@@ -367,32 +344,52 @@ function _saveToWorkspace(workspaceDir, codeText) {
   }
 }
 
+/**
+ * 构建执行脑系统提示词（从 SkillRegistry 动态注入技能约束）
+ */
+export function buildExecutorSystemPrompt(selectedSkill = 'bili_toy') {
+  // 从 SkillRegistry 获取当前技能的 systemPrompt
+  const skillPrompt = skillRegistry.getSkillPrompt(selectedSkill);
+  const skill = skillRegistry.getSkill(selectedSkill);
+  const skillName = skill?.name || selectedSkill;
+
+  const basePrompt = `你是一个顶级全栈 Web 开发工程师与项目执行脑。你的联网检索功能已开启！
+
+${skillPrompt ? `${skillPrompt}\n` : ''}
+【绝对禁止事项 - 违反则视为任务失败】
+❌ 禁止：在任何游戏或应用中加入登录门禁、身份验证、账号绑定等阻断用户进入主功能的流程。游戏启动必须直接可玩，无需登录。
+❌ 禁止：使用 dummyimage.com、placeholder.com、placehold.it 或任何测试性占位图片服务。
+❌ 禁止：在代码中引用本地不存在的图片路径（如 dog.png、cat.png），必须用内嵌 SVG 或 DiceBear API 替代。
+❌ 禁止：输出纯文字描述或注释性内容，必须直接输出完整立即可运行的单文件 HTML5 代码。
+❌ 禁止：在页面中保留任何调试文本、测试按钮、占位符内容。
+
+【强制质量标准】
+✅ 若制作 Galgame/视觉小说：必须包含≥50条对话节点、≥3个分支路线、≥2个不同结局，角色立绘用内嵌 SVG 绘制。
+✅ 所有 Web 页面必须 mobile-first 双端适配（viewport meta + @media 媒体查询）。
+若遇到歧义，可用 [QUESTION_TO_PLANNER]提问[/QUESTION_TO_PLANNER]`;
+
+  return basePrompt;
+}
+
+/**
+ * 构建执行脑用户任务提示词
+ */
 export function buildExecutorPrompt(plan, task, plannerAnswer = null, selectedSkill = 'bili_toy') {
-  const toySkillPrompt = selectedSkill === 'bili_toy' ? `
-【🎮 bilibili Toy 平台交互规范技能（已启用）】
-1. 所有图片/样式/静态资源必须采用相对路径引用（如 ./assets/chara.png 或 assets/chara.png），严禁使用绝对路径（如 /assets/）。
-2. 保底防白屏机制：页面内必须包含内嵌 SVG 或 Data URL 备用资源，确保离开在线 CDN 也能流畅运行。
-3. 代码结构符合 B端 Toy 打包与发布规范，必须可在最外层通过 index.html 打开。` : '';
+  // 获取技能约束规则（用于任务提示词强化）
+  const skill = skillRegistry.getSkill(selectedSkill);
+  const qualityRules = skill?.qualityRules || [];
+  const forbiddenPatterns = skill?.forbiddenPatterns || [];
 
-  const dynamicInstruction = `${toySkillPrompt}
+  const rulesBlock = qualityRules.length > 0
+    ? `\n【当前技能质量规则 - ${skill.name}】\n${qualityRules.map(r => `✅ ${r}`).join('\n')}`
+    : '';
 
-【绝对禁止 - 违反则任务失败】
-❌ 禁止加入任何登录门禁、账号绑定、身份验证阻断流程，游戏/应用必须直接可用。
-❌ 禁止引用 dummyimage.com / placeholder.com 等测试占位图服务；禁止引用本地不存在的图片路径（如 dog.png）。
-   角色立绘强制使用内嵌 SVG 矢量绘图，或通过 https://api.dicebear.com/7.x/anime/svg?seed=角色名 加载。
-❌ 禁止在页面中保留调试文字、测试性按钮、临时占位符内容。
-
-【强制交付质量标准】
-✅ 若任务涉及 Galgame / 视觉小说 / 互动故事：
-   - 必须包含 ≥ 50 条对话节点（storyData 数组条目 ≥ 50）
-   - 必须包含 ≥ 3 条不同分支路线（choices 分支节点）
-   - 必须包含 ≥ 2 个不同结局场景（ending_a / ending_b 等）
-   - 角色立绘必须用内嵌 SVG 绘制，禁止使用外部图片 URL
-✅ 100% 完整输出实体代码，必须包裹在规范 Markdown 代码块中
-✅ 强制 Web 双端自适应：必须包含 <meta name="viewport" content="width=device-width, initial-scale=1.0">，并使用 CSS @media (max-width: 768px) 媒体查询实现移动端与桌面端双端适配`;
+  const forbidBlock = forbiddenPatterns.length > 0
+    ? `\n【当前技能禁止项】\n${forbiddenPatterns.map(r => `❌ ${r}`).join('\n')}`
+    : '';
 
   if (plannerAnswer) {
-    return `策略脑回答了你的问题：\n\n${plannerAnswer}\n\n请继续执行任务 ${task.id}：${task.title}${dynamicInstruction}`;
+    return `策略脑回答了你的问题：\n\n${plannerAnswer}\n\n请继续执行任务 ${task.id}：${task.title}${rulesBlock}${forbidBlock}`;
   }
-  return `项目：${plan?.title || '项目'}\n任务 ${task.id}：${task.title}\n描述：${task.description}\n预期输出：${task.expected_output || '完整实体代码/文件'}${dynamicInstruction}`;
+  return `项目：${plan?.title || '项目'}\n任务 ${task.id}：${task.title}\n描述：${task.description}\n预期输出：${task.expected_output || '完整实体代码/文件'}${rulesBlock}${forbidBlock}`;
 }

@@ -144,6 +144,44 @@
               </div>
             </div>
           </div>
+        <!-- 🔮 技能炼化面板 (位于项目技能选择器正上方) -->
+        <div class="skill-alchemy-panel glass-card" id="skillAlchemyPanel">
+          <div class="alchemy-toggle-header" id="alchemyToggleHeader" onclick="toggleAlchemyPanel()">
+            <div class="alchemy-title-group">
+              <span class="alchemy-badge-icon">🔮</span>
+              <span class="alchemy-main-text"><strong>技能炼化 (Skill Alchemy)</strong></span>
+            </div>
+            <span class="alchemy-arrow" id="alchemyArrow">▼</span>
+          </div>
+          <div class="alchemy-body" id="alchemyBody" style="display:none">
+            <div class="alchemy-input-group">
+              <label for="alchemyUrls">🌐 信源 URL / 官方文档 / GitHub 仓库:</label>
+              <textarea id="alchemyUrls" rows="2" placeholder="输入信源 URL（每行一个），例如：
+https://www.bilibili.com/toy/publish/sdk
+https://github.com/user/repo"></textarea>
+            </div>
+            <div class="alchemy-presets">
+              <span class="preset-label">快捷信源:</span>
+              <button class="btn-preset" onclick="addAlchemyPreset('https://www.bilibili.com/toy/publish/sdk')">B站 Toy SDK</button>
+              <button class="btn-preset" onclick="addAlchemyPreset('https://www.bilibili.com/toy/toy-new-up-guide/index.html')">B站 Toy 指引</button>
+            </div>
+            <div class="alchemy-input-group" style="margin-top:6px;">
+              <label for="alchemyInstruction">💡 额外补充炼化要求 (可选):</label>
+              <input type="text" id="alchemyInstruction" placeholder="例如：重点关注音频组件和画质适配规约..." />
+            </div>
+            <button class="btn-alchemy-run" id="alchemyRunBtn" onclick="runSkillAlchemy()">
+              <span class="alchemy-spark">✨</span> 提取信源并炼化 Skill
+            </button>
+            <!-- 炼化进度与思考流展示区 -->
+            <div class="alchemy-status-box" id="alchemyStatusBox" style="display:none">
+              <div class="alchemy-stage-indicator" id="alchemyStageIndicator">
+                <span class="spinner-small"></span> 正在抓取信源内容...
+              </div>
+              <div class="alchemy-stream-output" id="alchemyStreamOutput"></div>
+            </div>
+          </div>
+        </div>
+
         <!-- 🎯 项目技能配置区 (位于启动项目按钮正上方) -->
         <div class="skill-selector-panel" id="skillSelectorPanel">
           <div class="skill-toggle-header" id="skillToggleHeader" onclick="toggleSkillMenu()">

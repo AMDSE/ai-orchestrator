@@ -11,6 +11,8 @@ import { fileURLToPath } from 'url';
 import 'dotenv/config';
 
 import { Orchestrator } from './orchestrator.js';
+import { skillRegistry } from './skill-registry.js';
+import { scrapeSourceUrls, alchemizeSkill } from './skill-alchemist.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -37,9 +39,9 @@ wss.on('connection', (ws) => {
   clients.add(ws);
   console.log(`[WS] Client connected (total: ${clients.size})`);
 
-  // 发送当前所有项目状态
+  // 发送当前所有项目状态 + 技能列表
   const projects = orchestrator.getProjects();
-  ws.send(JSON.stringify({ type: 'init', projects }));
+  ws.send(JSON.stringify({ type: 'init', projects, skills: skillRegistry.getAllForClient() }));
 
   ws.on('close', () => {
     clients.delete(ws);
@@ -61,19 +63,23 @@ orchestrator.on('update', (update) => {
   broadcast({ type: 'orchestrator_update', ...update });
 });
 
+// SkillRegistry 技能更新 → WebSocket 广播（热加载新技能）
+skillRegistry._emitter = { emit: (event, data) => {
+  if (event === 'skills_updated') {
+    broadcast({ type: 'skills_updated', skills: data.skills });
+  }
+}};
+
 // ── REST API ─────────────────────────────────────────────────────────────────
 
-// 创建新项目（支持全局与个性化模型/外接API设置、迭代轮数以及项目技能选择）
+// 创建新项目
 app.post('/api/projects', async (req, res) => {
   const { userInput, mode = 'standard', plannerConfig = null, executorConfig = null, maxIterations = 3, selectedSkill = 'bili_toy' } = req.body;
   if (!userInput?.trim()) {
     return res.status(400).json({ error: '请输入项目想法' });
   }
-
   const projectId = uuidv4();
   res.json({ projectId, status: 'created' });
-
-  // 异步启动，不阻塞响应
   orchestrator.createProject(projectId, userInput.trim(), mode, plannerConfig, executorConfig, maxIterations, selectedSkill).catch(console.error);
 });
 
@@ -89,13 +95,12 @@ app.get('/api/projects/:id', (req, res) => {
   res.json(project);
 });
 
-// 用户实时介入接口（支持文本与文件上传）
+// 用户实时介入
 app.post('/api/projects/:id/intervene', async (req, res) => {
   const { userInstruction = '', files = [] } = req.body;
   if (!userInstruction?.trim() && (!files || files.length === 0)) {
     return res.status(400).json({ error: '请输入介入指导要求或选择上传文件' });
   }
-
   try {
     await orchestrator.intervene(req.params.id, userInstruction.trim(), files);
     const updatedProject = orchestrator.getProject(req.params.id);
@@ -105,7 +110,7 @@ app.post('/api/projects/:id/intervene', async (req, res) => {
   }
 });
 
-// 动态更新项目双脑模型配置与迭代轮数接口
+// 动态更新模型配置
 app.post('/api/projects/:id/config', (req, res) => {
   const { plannerConfig, executorConfig, maxIterations } = req.body;
   try {
@@ -122,7 +127,7 @@ app.delete('/api/projects/:id', (req, res) => {
   res.json({ success: true });
 });
 
-// 中止项目（停止当前模型生成）
+// 中止项目
 app.post('/api/projects/:id/stop', (req, res) => {
   try {
     orchestrator.stopProject(req.params.id);
@@ -132,25 +137,109 @@ app.post('/api/projects/:id/stop', (req, res) => {
   }
 });
 
+// ── 技能管理 API ────────────────────────────────────────────────────────────
+
+// 获取所有技能
+app.get('/api/skills', (req, res) => {
+  res.json(skillRegistry.getAllForClient());
+});
+
+// 删除用户炼化的技能（内置技能不可删除）
+app.delete('/api/skills/:id', (req, res) => {
+  try {
+    skillRegistry.deleteSkill(req.params.id);
+    broadcast({ type: 'skills_updated', skills: skillRegistry.getAllForClient() });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ── 技能炼化 API ────────────────────────────────────────────────────────────
+
+// 单纯爬取信源（预览用，不炼化）
+app.post('/api/skill-alchemy/scrape', async (req, res) => {
+  const { urls } = req.body;
+  if (!urls || !Array.isArray(urls) || urls.length === 0) {
+    return res.status(400).json({ error: '请提供至少一个信源 URL' });
+  }
+  try {
+    const results = await scrapeSourceUrls(urls);
+    res.json({ success: true, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 炼化技能（流式 SSE 推进度）
+app.post('/api/skill-alchemy/run', async (req, res) => {
+  const { urls, customPrompt, plannerConfig } = req.body;
+  if (!urls || !Array.isArray(urls) || urls.length === 0) {
+    return res.status(400).json({ error: '请提供至少一个信源 URL' });
+  }
+
+  // 使用 SSE 流式推送进度
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const send = (type, data) => {
+    res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
+  };
+
+  try {
+    let resultSkill = null;
+
+    resultSkill = await alchemizeSkill({
+      urls,
+      customPrompt,
+      plannerConfig,
+      onProgress: (stage, content) => {
+        if (stage === 'token') {
+          send('token', { token: content });
+        } else {
+          send('progress', { stage, message: content });
+        }
+      }
+    });
+
+    // 炼化完成，广播技能列表更新
+    broadcast({ type: 'skills_updated', skills: skillRegistry.getAllForClient() });
+
+    send('complete', { skill: resultSkill });
+    res.end();
+  } catch (err) {
+    send('error', { message: err.message });
+    res.end();
+  }
+});
+
 // 健康检查
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     model: process.env.LONGCAT_MODEL,
     activeProjects: orchestrator.activeCount,
-    totalProjects: orchestrator.projects.size
+    totalProjects: orchestrator.projects.size,
+    skills: skillRegistry.skills.size
   });
 });
 
 // ── 启动服务器 ────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`
+
+// 先初始化 SkillRegistry，再启动监听
+skillRegistry.init().then(() => {
+  server.listen(PORT, () => {
+    console.log(`
 ╔════════════════════════════════════════════╗
 ║     🤖 AI 多智能体编排系统 已启动           ║
 ║     策略脑: LongCat-2.0                    ║
 ║     执行脑: Antigravity (本地)              ║
+║     技能库: ${skillRegistry.skills.size} 个技能已加载             ║
 ║     地址: http://localhost:${PORT}           ║
 ╚════════════════════════════════════════════╝
-  `);
-});
+    `);
+  });
+}).catch(console.error);

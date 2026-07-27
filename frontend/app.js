@@ -1,11 +1,12 @@
 // frontend/app.js
-// WebSocket 客户端 + 界面交互逻辑（包含实时数据双向同步、聊天框直接内联思考过程、自动拉起 Antigravity Agent 执行）
+// WebSocket 客户端 + 界面交互逻辑（包含实时数据双向同步、动态 Skill 炼化与注册、内联思考过程、自动拉起 Antigravity Agent）
 
 const WS_URL  = `ws://${location.host}`;
 const API_URL = `http://${location.host}`;
 
 let ws = null;
 let projects = new Map();
+let loadedSkills = []; // 动态存储从后端加载的所有 Skill
 let selectedProjectId = null;
 let currentMode = 'standard';
 let currentReviewProject = null;
@@ -19,9 +20,163 @@ let executorProvider = 'antigravity';
 let globalConfigExpanded = false;
 let attachedFiles = [];
 
-// 🎯 项目技能全局配置状态（默认启用 B站 Toy 技能）
+// 🎯 项目技能全局配置状态
 let selectedSkill = 'bili_toy';
 let skillMenuExpanded = false;
+let alchemyPanelExpanded = false;
+
+// ── 🔮 技能炼化面板控制 ────────────────────────────────────────────────────────
+function toggleAlchemyPanel() {
+  alchemyPanelExpanded = !alchemyPanelExpanded;
+  const body = document.getElementById('alchemyBody');
+  const arrow = document.getElementById('alchemyArrow');
+  if (body) body.style.display = alchemyPanelExpanded ? 'flex' : 'none';
+  if (arrow) arrow.classList.toggle('open', alchemyPanelExpanded);
+}
+
+function addAlchemyPreset(url) {
+  const textarea = document.getElementById('alchemyUrls');
+  if (!textarea) return;
+  const current = textarea.value.trim();
+  if (current.includes(url)) return;
+  textarea.value = current ? `${current}\n${url}` : url;
+}
+
+// 运行技能炼化 (SSE 流式接收进度与生成 Token)
+async function runSkillAlchemy() {
+  const urlsText = document.getElementById('alchemyUrls')?.value || '';
+  const customPrompt = document.getElementById('alchemyInstruction')?.value || '';
+  const urls = urlsText.split('\n').map(u => u.trim()).filter(Boolean);
+
+  if (urls.length === 0) {
+    showToast('⚠️ 请至少输入一个信源 URL', 'error');
+    return;
+  }
+
+  const runBtn = document.getElementById('alchemyRunBtn');
+  const statusBox = document.getElementById('alchemyStatusBox');
+  const stageIndicator = document.getElementById('alchemyStageIndicator');
+  const streamOutput = document.getElementById('alchemyStreamOutput');
+
+  if (runBtn) runBtn.disabled = true;
+  if (statusBox) statusBox.style.display = 'block';
+  if (streamOutput) streamOutput.textContent = '';
+
+  const plannerConfig = getPlannerConfig();
+
+  try {
+    const response = await fetch(`${API_URL}/api/skill-alchemy/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls, customPrompt, plannerConfig })
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || '炼化请求失败');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const event = JSON.parse(line.slice(6));
+          if (event.type === 'progress') {
+            if (stageIndicator) {
+              stageIndicator.innerHTML = `<span class="spinner-small"></span> ${event.message}`;
+            }
+          } else if (event.type === 'token') {
+            if (streamOutput) {
+              streamOutput.textContent += event.token;
+              streamOutput.scrollTop = streamOutput.scrollHeight;
+            }
+          } else if (event.type === 'complete') {
+            const newSkill = event.skill;
+            showToast(`✨ 技能炼化成功！已保存：${newSkill.name}`, 'success');
+            selectSkill(newSkill.id, newSkill.name);
+            if (stageIndicator) {
+              stageIndicator.innerHTML = `✅ 炼化完成！新技能 <strong>${newSkill.name}</strong> 已自动加载到技能栏`;
+            }
+          } else if (event.type === 'error') {
+            throw new Error(event.message);
+          }
+        } catch (e) {
+          console.warn('[Alchemy SSE Parse Warning]', e.message);
+        }
+      }
+    }
+  } catch (err) {
+    showToast(`❌ 炼化失败: ${err.message}`, 'error');
+    if (stageIndicator) {
+      stageIndicator.innerHTML = `❌ 炼化出错: ${err.message}`;
+    }
+  } finally {
+    if (runBtn) runBtn.disabled = false;
+  }
+}
+
+// ── 🎯 技能列表渲染与选择控制 ────────────────────────────────────────────────
+function renderSkillsList(skills) {
+  loadedSkills = skills;
+  const dropdown = document.getElementById('skillDropdown');
+  if (!dropdown) return;
+
+  dropdown.innerHTML = skills.map(s => {
+    const isActive = s.id === selectedSkill;
+    const icon = s.icon || '🔧';
+    const isBuiltIn = s.builtIn;
+
+    return `
+      <div class="skill-option ${isActive ? 'active' : ''}" data-skill="${s.id}" onclick="selectSkill('${s.id}', '${s.name.replace(/'/g, "\\'")}')">
+        <div class="skill-option-header">
+          <span class="skill-name">${icon} ${s.name}</span>
+          <div style="display:flex; align-items:center; gap:4px;">
+            ${isActive ? '<span class="skill-tag-active">已启用</span>' : ''}
+            ${!isBuiltIn ? `<button class="btn-delete-skill" onclick="deleteSkill(event, '${s.id}')" title="删除此炼化技能">✕</button>` : ''}
+          </div>
+        </div>
+        <div class="skill-desc">${s.description || '无描述'}</div>
+      </div>
+    `;
+  }).join('');
+
+  // 同步已选技能显示名称
+  const cur = skills.find(s => s.id === selectedSkill);
+  if (cur) {
+    const nameEl = document.getElementById('selectedSkillName');
+    if (nameEl) nameEl.textContent = cur.name;
+  }
+}
+
+async function deleteSkill(event, skillId) {
+  event.stopPropagation();
+  if (!confirm('确定删除该炼化技能吗？')) return;
+
+  try {
+    const res = await fetch(`${API_URL}/api/skills/${skillId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error);
+    }
+    showToast('🗑️ 技能已删除', 'info');
+    if (selectedSkill === skillId) {
+      selectSkill('bili_toy', '🎮 B站 Toy 互动规范');
+    }
+  } catch (e) {
+    showToast(`删除技能失败: ${e.message}`, 'error');
+  }
+}
 
 function toggleSkillMenu() {
   skillMenuExpanded = !skillMenuExpanded;
@@ -36,26 +191,15 @@ function selectSkill(skillId, skillName) {
   const nameEl = document.getElementById('selectedSkillName');
   if (nameEl) nameEl.textContent = skillName;
 
-  // 更新选项 UI 高亮
   document.querySelectorAll('.skill-option').forEach(opt => {
     const isActive = opt.dataset.skill === skillId;
     opt.classList.toggle('active', isActive);
-    let tag = opt.querySelector('.skill-tag-active');
-    if (isActive) {
-      if (!tag) {
-        tag = document.createElement('span');
-        tag.className = 'skill-tag-active';
-        tag.textContent = '已启用';
-        opt.querySelector('.skill-option-header').appendChild(tag);
-      }
-    } else if (tag) {
-      tag.remove();
-    }
   });
 
-  toggleSkillMenu(); // 选择后收起
+  if (skillMenuExpanded) toggleSkillMenu();
   showToast(`🎯 已切换项目技能为：${skillName}`, 'info');
 }
+
 
 // ── WebSocket 连接与实时接收处理 ─────────────────────────────────────────────
 function connectWS() {
@@ -88,7 +232,17 @@ function handleServerMessage(msg) {
     for (const project of msg.projects) {
       projects.set(project.id, project);
     }
+    if (msg.skills) {
+      renderSkillsList(msg.skills);
+    }
     renderAll();
+    return;
+  }
+
+  if (msg.type === 'skills_updated') {
+    if (msg.skills) {
+      renderSkillsList(msg.skills);
+    }
     return;
   }
 
