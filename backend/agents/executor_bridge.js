@@ -208,7 +208,7 @@ async function executeViaCustomApi(taskData, executorConfig, onToken = null) {
     messages: [
       {
         role: 'system',
-        content: `你是一个高效的AI项目执行者（执行脑）。${searchPrompt}按照策略脑规划完成任务。若遇到歧义，可用 [QUESTION_TO_PLANNER]提问[/QUESTION_TO_PLANNER]`
+        content: buildExecutorSystemPrompt(taskData.selectedSkill || 'bili_toy')
       },
       { role: 'user', content: prompt }
     ],

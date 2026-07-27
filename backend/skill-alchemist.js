@@ -145,10 +145,18 @@ ${totalContent}
   let skillData;
 
   try {
-    // 去除可能的 Markdown 包裹
-    const jsonMatch = rawOutput.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('LLM 未输出有效 JSON');
-    skillData = JSON.parse(jsonMatch[0]);
+    let cleanText = rawOutput.trim();
+    // 清除 Markdown 代码块标记 ```json ... ```
+    cleanText = cleanText.replace(/^```[a-zA-Z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+
+    // 匹配最外层平衡的 JSON 对象 {}
+    const firstOpen = cleanText.indexOf('{');
+    const lastClose = cleanText.lastIndexOf('}');
+    if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
+      cleanText = cleanText.substring(firstOpen, lastClose + 1);
+    }
+
+    skillData = JSON.parse(cleanText);
   } catch (e) {
     throw new Error(`技能 JSON 解析失败: ${e.message}\n原始输出:\n${rawOutput.slice(0, 500)}`);
   }

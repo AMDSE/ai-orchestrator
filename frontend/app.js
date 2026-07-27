@@ -89,9 +89,10 @@ async function runSkillAlchemy() {
       buffer = lines.pop();
 
       for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
+        const cleanLine = line.trim();
+        if (!cleanLine.startsWith('data: ')) continue;
         try {
-          const event = JSON.parse(line.slice(6));
+          const event = JSON.parse(cleanLine.slice(6));
           if (event.type === 'progress') {
             if (stageIndicator) {
               stageIndicator.innerHTML = `<span class="spinner-small"></span> ${event.message}`;
