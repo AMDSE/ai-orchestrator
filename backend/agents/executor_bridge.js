@@ -73,7 +73,17 @@ function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = nul
 
       chatProc.on('close', (code) => {
         cleanupTempFile();
-        resolve({ type: 'task_complete', output: output.trim() });
+        const trimmedOutput = output.trim();
+
+        // 检查是否有向策略脑提问的标签
+        if (trimmedOutput.includes('[QUESTION_TO_PLANNER]')) {
+          const match = trimmedOutput.match(/\[QUESTION_TO_PLANNER\]([\s\S]*?)\[\/QUESTION_TO_PLANNER\]/);
+          if (match) {
+            return resolve({ type: 'question', question: match[1].trim() });
+          }
+        }
+
+        resolve({ type: 'task_complete', output: trimmedOutput });
       });
 
       chatProc.on('error', (err) => {
@@ -235,16 +245,16 @@ export async function executeTask(taskData, defaultOpenaiClient, onToken = null)
 
 function _saveToWorkspace(workspaceDir, codeText) {
   try {
-    const htmlMatch = codeText.match(/(<![Dd][Oo][Cc][Tt][Yy][Pp][Ee] html>[\s\S]*<\/html>)/i);
-    const codeBlockMatch = codeText.match(/```([a-zA-Z0-9_-]+)?\s*([\s\S]*?)```/);
+    if (!codeText || typeof codeText !== 'string') return;
 
-    let content = codeText;
+    let content = codeText.trim();
     let fileName = 'index.html';
 
-    if (htmlMatch) {
-      content = htmlMatch[1].trim();
-      fileName = 'index.html';
-    } else if (codeBlockMatch) {
+    // 1. 优先提取 Markdown 代码块
+    const codeBlockMatch = content.match(/```([a-zA-Z0-9_-]+)?\s*([\s\S]*?)```/);
+    const htmlTagMatch = content.match(/(<![Dd][Oo][Cc][Tt][Yy][Pp][Ee] html[\s\S]*<\/html>|<html[\s\S]*<\/html>)/i);
+
+    if (codeBlockMatch) {
       const lang = (codeBlockMatch[1] || '').toLowerCase();
       content = codeBlockMatch[2].trim();
 
@@ -258,11 +268,17 @@ function _saveToWorkspace(workspaceDir, codeText) {
       else if (['css'].includes(lang)) fileName = 'style.css';
       else if (['sql'].includes(lang)) fileName = 'query.sql';
       else if (lang) fileName = `output.${lang}`;
+    } else if (htmlTagMatch) {
+      content = htmlTagMatch[1].trim();
+      fileName = 'index.html';
     }
+
+    // 清洗多余的反引号或前导/后置垃圾文本
+    content = content.replace(/^```[a-zA-Z]*\n?/i, '').replace(/\n?```$/i, '').trim();
 
     const filePath = path.join(workspaceDir, fileName);
     fs.writeFileSync(filePath, content, 'utf-8');
-    console.log(`📁 真实构建产物已保存至工作区: ${filePath}`);
+    console.log(`📁 真实构建产物已无损落盘至工作区: ${filePath} (${content.length} 字节)`);
   } catch (e) {
     console.error('保存工作区文件失败:', e.message);
   }
@@ -313,7 +329,7 @@ export function buildExecutorPrompt(plan, task, plannerAnswer = null, selectedSk
     : '';
 
   if (plannerAnswer) {
-    return `策略脑回答了你的问题：\n\n${plannerAnswer}\n\n请继续执行任务 ${task.id}：${task.title}${rulesBlock}${forbidBlock}`;
+    return `项目：${plan?.title || '项目'}\n任务 ${task.id}：${task.title}\n描述：${task.description}\n预期输出：${task.expected_output || '完整实体代码/文件'}\n\n【策略脑指导更新】策略脑对你之前提问的解决方案：\n${plannerAnswer}\n\n请结合策略脑的专业指导，继续完成上述任务。${rulesBlock}${forbidBlock}`;
   }
   return `项目：${plan?.title || '项目'}\n任务 ${task.id}：${task.title}\n描述：${task.description}\n预期输出：${task.expected_output || '完整实体代码/文件'}${rulesBlock}${forbidBlock}`;
 }

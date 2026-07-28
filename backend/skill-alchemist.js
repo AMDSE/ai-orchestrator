@@ -158,7 +158,15 @@ ${totalContent}
 
     skillData = JSON.parse(cleanText);
   } catch (e) {
-    throw new Error(`技能 JSON 解析失败: ${e.message}\n原始输出:\n${rawOutput.slice(0, 500)}`);
+    // 兜底尝试：移除可能存在的尾部逗号与注释
+    try {
+      const sanitized = cleanText
+        .replace(/,\s*([}\]])/g, '$1') // 移除尾随逗号
+        .replace(/\/\*[\s\S]*?\*\/|([^:]|^)\/\/.*/g, '$1'); // 移除注释
+      skillData = JSON.parse(sanitized);
+    } catch (e2) {
+      throw new Error(`技能 JSON 解析失败: ${e.message}\n原始输出:\n${rawOutput.slice(0, 500)}`);
+    }
   }
 
   // Stage 4: 补全元数据并校验
