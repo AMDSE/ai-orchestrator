@@ -144,14 +144,30 @@ export function buildExecutorPrompt(plan, task, plannerAnswer = null, selectedSk
 
 ## 🚀 安装与启动教程
 
-### 1. 克隆仓库与安装依赖
-```bash
-git clone <repository_url>
-cd ai-orchestrator
-npm install
-```
+## ⚡ 快速启动
 
-### 2. 配置环境变量
+### 方式一：Windows 双击一键启动 (推荐)
+直接双击根目录下的 **`start.bat`** 即可：
+- 自动检测并清理 3000 端口旧进程
+- 在后台静默拉起 Node.js 服务器
+- 自动在默认浏览器中打开 `http://localhost:3000`
+
+---
+
+### 方式二：命令行手动启动
+```bash
+# 1. 进入项目目录
+cd C:\Users\MR T\.gemini\antigravity\scratch\ai-orchestrator
+
+# 2. 安装依赖
+npm install
+
+# 3. 启动服务
+node backend/server.js
+```
+启动后在浏览器打开：`http://localhost:3000`
+
+### 3. 配置环境变量
 复制配置文件模板 `.env.example` 为 `.env`：
 ```bash
 cp .env.example .env
