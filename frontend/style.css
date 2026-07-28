@@ -763,6 +763,22 @@ textarea::placeholder { color: var(--text-muted); }
   margin: 0;
 }
 
+/* ── 💬 打字机流式气泡与闪烁光标 ── */
+.streaming-bubble {
+  position: relative;
+}
+.typing-cursor {
+  display: inline-block;
+  color: var(--accent-blue);
+  font-weight: bold;
+  margin-left: 2px;
+  animation: blinkCursor 0.8s infinite;
+}
+@keyframes blinkCursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 /* ── ⚡ 实时介入栏 ── */
 .intervention-container {
   display: flex;

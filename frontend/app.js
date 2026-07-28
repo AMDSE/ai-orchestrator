@@ -261,13 +261,28 @@ function handleServerMessage(msg) {
       }
     }
 
+    let skipFullRender = false;
+
     switch (type) {
       case 'project_created':
         if (data.project) projects.set(projectId, data.project);
         break;
 
       case 'status_change':
-        if (p) p.status = data.status;
+        if (p) {
+          p.status = data.status;
+          if (data.currentTaskIndex !== undefined) p.currentTaskIndex = data.currentTaskIndex;
+          if (data.progress !== undefined) p.progress = data.progress;
+        }
+        break;
+
+      case 'task_start':
+        if (p) {
+          p.status = 'executing';
+          p.currentTaskIndex = data.taskIndex;
+          p.progress = data.progress || p.progress;
+          clearProjectStreamOutput(projectId);
+        }
         break;
 
       case 'iteration_update':
@@ -316,18 +331,23 @@ function handleServerMessage(msg) {
 
       case 'thought':
         appendThought(projectId, data.role, data.token);
+        skipFullRender = true;
+        break;
+
+      case 'planner_token':
+        appendProjectStreamToken(projectId, 'planner', data.token);
+        skipFullRender = true;
         break;
 
       case 'token':
-        if (projectId === selectedProjectId) {
-          appendStreamToken(data.token);
-        }
+        appendProjectStreamToken(projectId, 'executor', data.token);
+        skipFullRender = true;
         break;
 
       case 'task_complete':
         if (p) {
           p.progress = data.progress || p.progress;
-          clearStreamOutput();
+          clearProjectStreamOutput(projectId);
           const task = p.tasks?.find(t => t.id === data.taskId);
           if (task) task.output = data.output;
         }
@@ -339,7 +359,7 @@ function handleServerMessage(msg) {
           p.completedAt = data.completedAt;
           p.result      = data.result;
           p.progress    = 100;
-          clearStreamOutput();
+          clearProjectStreamOutput(projectId);
           showToast(`✅ 项目完成！`, 'success');
         }
         break;
@@ -349,8 +369,10 @@ function handleServerMessage(msg) {
         break;
     }
 
-    // 实时同步刷新界面与列表进度
-    renderAll();
+    // 高频 token/thought 传输时跳过 renderAll 全量 DOM 销毁重绘，提升流畅度
+    if (!skipFullRender) {
+      renderAll();
+    }
   }
 }
 
@@ -781,14 +803,63 @@ function appendMessage(msg, scroll = true) {
   if (scroll) container.scrollTop = container.scrollHeight;
 }
 
-let streamBuffer = '';
-function appendStreamToken(token) {
-  streamBuffer += token;
-  document.getElementById('streamOutput').textContent = streamBuffer;
+let streamBufferMap = new Map(); // projectId -> text
+
+function appendProjectStreamToken(projectId, role, token) {
+  const current = (streamBufferMap.get(projectId) || '') + token;
+  streamBufferMap.set(projectId, current);
+
+  if (projectId === selectedProjectId) {
+    const streamOutput = document.getElementById('streamOutput');
+    if (streamOutput) {
+      streamOutput.textContent = current;
+      streamOutput.scrollTop = streamOutput.scrollHeight;
+    }
+    updateInlineStreamBubble(role, current);
+  }
 }
+
+function clearProjectStreamOutput(projectId) {
+  if (projectId) {
+    streamBufferMap.delete(projectId);
+  } else {
+    streamBufferMap.clear();
+  }
+  if (!selectedProjectId || projectId === selectedProjectId) {
+    const streamOutput = document.getElementById('streamOutput');
+    if (streamOutput) streamOutput.textContent = '';
+    const bubble = document.getElementById('inlineStreamBubble');
+    if (bubble) bubble.remove();
+  }
+}
+
 function clearStreamOutput() {
-  streamBuffer = '';
-  document.getElementById('streamOutput').textContent = '';
+  clearProjectStreamOutput(selectedProjectId);
+}
+
+function updateInlineStreamBubble(role, text) {
+  const container = document.getElementById('messagesContainer');
+  if (!container) return;
+
+  let bubble = document.getElementById('inlineStreamBubble');
+  if (!bubble) {
+    bubble = document.createElement('div');
+    bubble.id = 'inlineStreamBubble';
+    bubble.className = `message-bubble ${role} streaming-bubble`;
+    container.appendChild(bubble);
+  }
+
+  const roleName = role === 'planner' ? '🔵 策略脑' : '🟢 执行脑';
+  const avatar = role === 'planner' ? '🔵' : '🟢';
+
+  bubble.innerHTML = `
+    <div class="bubble-avatar avatar-${role}">${avatar}</div>
+    <div>
+      <div class="bubble-content ${role}">${formatMessage(text)}<span class="typing-cursor">▌</span></div>
+      <div class="bubble-meta">${roleName} 正在实时打字输出中...</div>
+    </div>`;
+
+  container.scrollTop = container.scrollHeight;
 }
 
 function formatMessage(text) {

@@ -177,12 +177,17 @@ export class Orchestrator extends EventEmitter {
       project.currentTaskIndex = i;
       const task = project.tasks[i];
 
+      const startProgress = Math.round(10 + (i / project.tasks.length) * 80);
+      project.progress = startProgress;
+
       project.status = ProjectStatus.EXECUTING;
-      this._emit(projectId, 'status_change', { status: ProjectStatus.EXECUTING });
+      this._emit(projectId, 'status_change', { status: ProjectStatus.EXECUTING, currentTaskIndex: i, progress: project.progress });
+      this._emit(projectId, 'task_start', { taskId: task.id, taskTitle: task.title, taskIndex: i, totalTasks: project.tasks.length, progress: project.progress });
+
       this._addMessage(projectId, 'system',
         `⚡ **开始执行任务 ${task.id}/${project.tasks.length}** (第 ${project.iteration}/${project.maxIterations} 轮迭代)：${task.title}`
       );
-      
+
       const execModelName = project.executorConfig?.model || 'gemini-3.6-flash';
       this._addMessage(projectId, 'executor', `🟢 执行脑（模型: ${execModelName}）接收任务：${task.description}`);
 
@@ -195,11 +200,11 @@ export class Orchestrator extends EventEmitter {
       }
 
       task.output = result.output;
-      project.progress = Math.round(((i + 1) / project.tasks.length) * 80) + 10;
+      project.progress = Math.round(10 + ((i + 1) / project.tasks.length) * 80);
       this._addMessage(projectId, 'executor',
         `✅ **任务 ${task.id} 完成**\n${result.output?.substring(0, 600)}${result.output?.length > 600 ? '...' : ''}`
       );
-      this._emit(projectId, 'task_complete', { taskId: task.id, output: result.output, progress: project.progress });
+      this._emit(projectId, 'task_complete', { taskId: task.id, currentTaskIndex: i, output: result.output, progress: project.progress });
     }
 
     // === Phase 3: 策略脑检测审查与多轮迭代循环 ===
