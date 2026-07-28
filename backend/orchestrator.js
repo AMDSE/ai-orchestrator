@@ -104,20 +104,21 @@ export class Orchestrator extends EventEmitter {
         }
       };
 
+      const signal = abortCtrl.signal;
       let planResult;
       if (project.mode === 'creative') {
         this._addMessage(projectId, 'system', '💡 创意模式：策略脑正在头脑风暴生成方案...');
-        planResult = await this.planner.generateIdeas(projectId, project.userInput, project.plannerConfig, onPlannerChunk);
+        planResult = await this.planner.generateIdeas(projectId, project.userInput, project.plannerConfig, onPlannerChunk, signal);
         if (planResult.type === 'ideas') {
           this._addMessage(projectId, 'planner',
             `💡 **生成了 ${planResult.ideas.length} 个想法**\n` +
             planResult.ideas.map((idea, i) => `${i + 1}. ${idea}`).join('\n') +
             `\n\n✅ **选定方案**：${planResult.selected}\n📝 原因：${planResult.reason}`
           );
-          planResult = await this.planner.generatePlan(projectId, planResult.selected, project.plannerConfig, onPlannerChunk);
+          planResult = await this.planner.generatePlan(projectId, planResult.selected, project.plannerConfig, onPlannerChunk, signal);
         }
       } else {
-        planResult = await this.planner.generatePlan(projectId, project.userInput, project.plannerConfig, onPlannerChunk);
+        planResult = await this.planner.generatePlan(projectId, project.userInput, project.plannerConfig, onPlannerChunk, signal);
       }
 
       project.plan = planResult;
@@ -225,7 +226,8 @@ export class Orchestrator extends EventEmitter {
         project.maxIterations,
         project.tasks,
         project.plannerConfig,
-        onPlannerChunk
+        onPlannerChunk,
+        this.abortControllers.get(projectId)?.signal
       );
 
       if (reviewResult.decision === 'optimize' && reviewResult.new_tasks && reviewResult.new_tasks.length > 0) {
@@ -291,7 +293,8 @@ export class Orchestrator extends EventEmitter {
       project.plannerConfig,
       (type, token) => {
         if (type === 'thought') this._addThought(projectId, 'planner', token);
-      }
+      },
+      this.abortControllers.get(projectId)?.signal
     );
     const answerText = answer.answer || answer.content || JSON.stringify(answer);
 
@@ -311,7 +314,8 @@ export class Orchestrator extends EventEmitter {
       plan: project.plan,
       selectedSkill: project.selectedSkill || 'bili_toy',
       plannerAnswer: plannerAnswer || task._plannerAnswer || null,
-      executorConfig: project.executorConfig || { provider: 'antigravity', model: 'gemini-3.6-flash' }
+      executorConfig: project.executorConfig || { provider: 'antigravity', model: 'gemini-3.6-flash' },
+      signal: this.abortControllers.get(projectId)?.signal
     };
 
     const res = await executeTask(
@@ -378,7 +382,8 @@ export class Orchestrator extends EventEmitter {
       project.plannerConfig,
       (type, token) => {
         if (type === 'thought') this._addThought(projectId, 'planner', token);
-      }
+      },
+      this.abortControllers.get(projectId)?.signal
     );
 
     const replyText = plannerResponse.answer || plannerResponse.content || JSON.stringify(plannerResponse);

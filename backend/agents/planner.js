@@ -108,7 +108,7 @@ export class PlannerAgent {
     });
   }
 
-  async _streamCompletion(projectId, prompt, plannerConfig = null, onChunk = null) {
+  async _streamCompletion(projectId, prompt, plannerConfig = null, onChunk = null, signal = null) {
     const webSearch = plannerConfig?.webSearch !== false;
     const history = this._getHistory(projectId, webSearch);
 
@@ -127,7 +127,7 @@ export class PlannerAgent {
       messages: history,
       temperature: 0.7,
       stream: true,
-    });
+    }, { signal: signal || undefined });
 
     const chunks = [];
     for await (const chunk of stream) {
@@ -149,26 +149,26 @@ export class PlannerAgent {
     return this._parseResponse(fullContent);
   }
 
-  async generatePlan(projectId, userIdea, plannerConfig = null, onChunk = null) {
+  async generatePlan(projectId, userIdea, plannerConfig = null, onChunk = null, signal = null) {
     const prompt = `请为以下想法制定详细的执行计划：\n\n${userIdea}`;
-    return await this._streamCompletion(projectId, prompt, plannerConfig, onChunk);
+    return await this._streamCompletion(projectId, prompt, plannerConfig, onChunk, signal);
   }
 
-  async generateIdeas(projectId, hint = '', plannerConfig = null, onChunk = null) {
+  async generateIdeas(projectId, hint = '', plannerConfig = null, onChunk = null, signal = null) {
     const prompt = hint
       ? `请围绕"${hint}"生成3个有趣且有价值的项目想法，然后选出最佳方案并制定执行计划。`
       : `请自主生成3个有创意且实用的项目想法（可以是Web应用、工具、游戏等），然后选出最佳方案并制定执行计划。`;
-    return await this._streamCompletion(projectId, prompt, plannerConfig, onChunk);
+    return await this._streamCompletion(projectId, prompt, plannerConfig, onChunk, signal);
   }
 
-  async answerQuestion(projectId, question, context = '', plannerConfig = null, onChunk = null) {
+  async answerQuestion(projectId, question, context = '', plannerConfig = null, onChunk = null, signal = null) {
     const prompt = context
       ? `执行脑在执行项目时遇到了问题：\n\n问题：${question}\n\n上下文：${context}\n\n请给出专业的解决方案。`
       : `执行脑遇到了问题：${question}\n\n请给出专业的解决方案。`;
-    return await this._streamCompletion(projectId, prompt, plannerConfig, onChunk);
+    return await this._streamCompletion(projectId, prompt, plannerConfig, onChunk, signal);
   }
 
-  async reviewExecution(projectId, currentIteration, maxIterations, tasks, plannerConfig = null, onChunk = null) {
+  async reviewExecution(projectId, currentIteration, maxIterations, tasks, plannerConfig = null, onChunk = null, signal = null) {
     const outputsText = (tasks || []).map(t => `### 任务 ${t.id}: ${t.title}\n描述: ${t.description}\n预期输出: ${t.expected_output || ''}\n执行产物:\n${t.output || '未产生文本'}`).join('\n\n');
     const prompt = `【系统信号：执行脑已完成第 ${currentIteration} 轮代码方案构建】
 当前为第 ${currentIteration} 轮迭代 (设定上限为 ${maxIterations} 轮)。
@@ -183,17 +183,17 @@ ${outputsText}
 
 仅当产物 100% 覆盖用户需求、具备完美双端自适应且干净无任何冗余文本时，方可输出 decision="complete"。`;
 
-    return await this._streamCompletion(projectId, prompt, plannerConfig, onChunk);
+    return await this._streamCompletion(projectId, prompt, plannerConfig, onChunk, signal);
   }
 
-  async handleUserIntervention(projectId, userMessage, files = [], plannerConfig = null, onChunk = null) {
+  async handleUserIntervention(projectId, userMessage, files = [], plannerConfig = null, onChunk = null, signal = null) {
     let messageContent = userMessage || '';
     if (files && files.length > 0) {
       const filesText = files.map(f => `--- 📎 附件文件: ${f.name} ---\n${f.content}`).join('\n\n');
       messageContent = `${messageContent}\n\n[用户附带上传文件资料如下]:\n${filesText}`;
     }
     this.injectIntervention(projectId, messageContent);
-    return await this._streamCompletion(projectId, null, plannerConfig, onChunk);
+    return await this._streamCompletion(projectId, null, plannerConfig, onChunk, signal);
   }
 
   _parseResponse(content) {

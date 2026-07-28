@@ -202,8 +202,14 @@ function selectSkill(skillId, skillName) {
 }
 
 
-// ── WebSocket 连接与实时接收处理 ─────────────────────────────────────────────
+let reconnectTimer = null;
+
 function connectWS() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
   ws = new WebSocket(WS_URL);
 
   ws.onopen = () => {
@@ -222,7 +228,12 @@ function connectWS() {
 
   ws.onclose = () => {
     updateHealth(false);
-    setTimeout(connectWS, 3000);
+    if (!reconnectTimer) {
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        connectWS();
+      }, 3000);
+    }
   };
 
   ws.onerror = () => ws.close();
@@ -1066,6 +1077,32 @@ async function createProject() {
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<span class="btn-icon">🚀</span> 启动项目';
+  }
+}
+
+async function deleteProject(projectId, event) {
+  if (event) event.stopPropagation();
+  if (!confirm('确定删除该项目及其构建数据吗？')) return;
+
+  try {
+    const res = await fetch(`${API_URL}/api/projects/${projectId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || '删除失败');
+    }
+    projects.delete(projectId);
+    thoughtsMap.delete(projectId);
+    clearProjectStreamOutput(projectId);
+
+    if (selectedProjectId === projectId) {
+      selectedProjectId = null;
+      document.getElementById('messageArea').style.display = 'none';
+    }
+
+    showToast('🗑️ 项目已删除', 'info');
+    renderAll();
+  } catch (e) {
+    showToast(`删除失败: ${e.message}`, 'error');
   }
 }
 

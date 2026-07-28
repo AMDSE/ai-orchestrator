@@ -122,7 +122,7 @@ function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = nul
 /**
  * 使用外接自定义 API (OpenAI 格式) 执行脑
  */
-async function executeViaCustomApi(taskData, executorConfig, onToken = null) {
+async function executeViaCustomApi(taskData, executorConfig, onToken = null, signal = null) {
   const customClient = new OpenAI({
     apiKey: executorConfig.apiKey,
     baseURL: executorConfig.baseUrl || 'https://api.openai.com/v1',
@@ -132,11 +132,6 @@ async function executeViaCustomApi(taskData, executorConfig, onToken = null) {
   const modelName = executorConfig.model || 'gpt-4o';
 
   console.log(`🌐 使用外接自定义 API 执行脑 (BaseURL: ${executorConfig.baseUrl}, Model: ${modelName})`);
-
-  const webSearch = executorConfig.webSearch !== false;
-  const searchPrompt = webSearch
-    ? '你的联网检索功能已开启！遇到最新库版本、API变动或在线资料时请积极联网检索。'
-    : '你的联网检索功能已关闭。请基于内置知识模型解答，不使用外部网络检索。';
 
   const stream = await customClient.chat.completions.create({
     model: modelName,
@@ -149,7 +144,7 @@ async function executeViaCustomApi(taskData, executorConfig, onToken = null) {
     ],
     temperature: 0.6,
     stream: true,
-  });
+  }, { signal: signal || undefined });
 
   const chunks = [];
   for await (const chunk of stream) {
@@ -183,7 +178,7 @@ export async function executeTask(taskData, defaultOpenaiClient, onToken = null)
 
   // 若配置为外接自定义 API
   if (provider === 'custom_api' && executorConfig.apiKey) {
-    const result = await executeViaCustomApi(taskData, executorConfig, onToken);
+    const result = await executeViaCustomApi(taskData, executorConfig, onToken, taskData.signal);
     if (result.type === 'task_complete' && result.output) {
       _saveToWorkspace(workspaceDir, result.output);
     }
@@ -222,7 +217,7 @@ export async function executeTask(taskData, defaultOpenaiClient, onToken = null)
     ],
     temperature: 0.6,
     stream: true,
-  });
+  }, { signal: taskData.signal || undefined });
 
   const chunks = [];
   for await (const chunk of stream) {
@@ -268,6 +263,13 @@ function _saveToWorkspace(workspaceDir, codeText) {
       else if (['css'].includes(lang)) fileName = 'style.css';
       else if (['sql'].includes(lang)) fileName = 'query.sql';
       else if (lang) fileName = `output.${lang}`;
+      else {
+        // 无语言标签时的特征智能识别
+        if (/<![Dd][Oo][Cc][Tt][Yy][Pp][Ee]|<html/i.test(content)) fileName = 'index.html';
+        else if (/^\s*[\{\[]/.test(content)) fileName = 'data.json';
+        else if (content.includes('body {') || content.includes('margin:')) fileName = 'style.css';
+        else fileName = 'index.html';
+      }
     } else if (htmlTagMatch) {
       content = htmlTagMatch[1].trim();
       fileName = 'index.html';
