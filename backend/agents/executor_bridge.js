@@ -10,27 +10,7 @@ import { skillRegistry } from '../skill-registry.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-function getPythonExecutable() {
-  const customPath = `C:\\Users\\MRT~1\\AppData\\Local\\Programs\\Python\\Python314\\python.exe`;
-  try {
-    if (fs.existsSync(customPath)) return customPath;
-    execSync('python --version', { stdio: 'ignore' });
-    return 'python';
-  } catch {
-    return null;
-  }
-}
 
-function isPythonSdkAvailable() {
-  const py = getPythonExecutable();
-  if (!py) return false;
-  try {
-    execSync(`"${py}" -c "import google.antigravity"`, { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 function getAntigravityCliPath() {
   const shortPath = `C:\\Users\\MRT~1\\AppData\\Local\\Programs\\Antigravity IDE\\bin\\antigravity-ide.cmd`;
@@ -53,62 +33,7 @@ function isAntigravityCliAvailable() {
   }
 }
 
-function executeViaPythonSdk(taskData, onToken) {
-  return new Promise((resolve, reject) => {
-    const py = getPythonExecutable();
-    const pyScript = path.join(__dirname, 'executor_bridge.py');
 
-    const proc = spawn(py, [pyScript], {
-      stdio: ['pipe', 'pipe', 'pipe']
-    });
-
-    proc.stdin.write(JSON.stringify(taskData));
-    proc.stdin.end();
-
-    let buffer = '';
-    let lastResult = null;
-
-    proc.stdout.on('data', (data) => {
-      buffer += data.toString();
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const msg = JSON.parse(line);
-          if (msg.type === 'token') {
-            if (onToken) onToken(msg.token);
-          } else {
-            lastResult = msg;
-          }
-        } catch (e) {
-          // ignore
-        }
-      }
-    });
-
-    proc.stderr.on('data', (data) => {
-      console.error('[Python SDK Executor]', data.toString());
-    });
-
-    proc.on('close', (code) => {
-      if (buffer.trim()) {
-        try { lastResult = JSON.parse(buffer.trim()); } catch (e) {}
-      }
-      if (lastResult) {
-        resolve(lastResult);
-      } else if (code === 0) {
-        resolve({ type: 'task_complete', output: '任务在本地 Antigravity Agent 中执行完成' });
-      } else {
-        reject(new Error(`Python Executor 退出, code=${code}`));
-      }
-    });
-
-    proc.on('error', reject);
-    setTimeout(() => { proc.kill(); reject(new Error('Python Executor 超时')); }, 600000);
-  });
-}
 
 // 跟踪已为哪些项目拉起过独占 IDE 窗口，防止后续任务/迭代反复弹窗
 const launchedProjectWindows = new Set();
@@ -260,9 +185,8 @@ export async function executeTask(taskData, defaultOpenaiClient, onToken = null)
   taskData.model = model;
 
   const hasCli = isAntigravityCliAvailable();
-  const hasSdk = isPythonSdkAvailable();
 
-  console.log(`[Executor Engine] 模式: Antigravity | 模型: ${model} | Workspace: ${workspaceDir} | CLI=${hasCli}, SDK=${hasSdk}`);
+  console.log(`[Executor Engine] 模式: Antigravity | 模型: ${model} | Workspace: ${workspaceDir} | CLI=${hasCli}`);
 
   const prompt = buildExecutorPrompt(taskData.plan, taskData.task, taskData.plannerAnswer, taskData.selectedSkill || 'bili_toy');
 

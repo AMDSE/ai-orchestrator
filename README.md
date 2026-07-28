@@ -80,9 +80,7 @@ ai-orchestrator/
 │   │
 │   ├── 📁 agents/             # 双脑智能体桥接与驱动模块
 │   │   ├── 📄 planner.js      # 策略脑驱动器 (需求拆解、任务规划、答疑、迭代终审)
-│   │   ├── 📄 executor_bridge.js # 执行脑 Bridge (Antigravity Agent/CLI/外接 API 唤醒)
-│   │   └── 📄 executor_bridge.py # Antigravity Python SDK 兼容执行桥接脚本
-│   │
+│   │   └── 📄 executor_bridge.js # 执行脑 Bridge (Antigravity Agent/CLI/外接 API 唤醒)
 │   └── 📁 skills/             # 动态技能定义 JSON 存储目录
 │       ├── 📄 bili_toy.skill.json     # 🎮 B站 Toy 互动规范技能
 │       ├── 📄 standard_web.skill.json # 🌐 通用 Web 全栈技能
@@ -92,15 +90,6 @@ ai-orchestrator/
 │   ├── 📄 index.html          # 主界面 HTML 结构 (包含双脑配置、技能炼化、项目列表与审查台)
 │   ├── 📄 style.css           # 玻璃态 UI 样式表 (包含动画、暗黑主题、思考流面板、技能卡片)
 │   └── 📄 app.js              # 前端交互逻辑 (WebSocket 实时同步、SSE 炼化通信、@ 指令路由)
-│
-├── 📁 scripts/                # 环境探针与自动化诊断脚本库
-│   ├── 📄 check_status.ps1    # 检查进程与网络绑定状态
-│   ├── 📄 find_ports.ps1      # 探针 3000 端口占用情况
-│   ├── 📄 find_procs.ps1      # 过滤与定位 Node/Antigravity 进程 PID
-│   ├── 📄 get_cmdline.ps1     # 提取后台进程完整启动命令行
-│   ├── 📄 probe_api.ps1       # 测试后端 REST API 健康状态
-│   ├── 📄 probe_https.ps1     # 测试模型接口 HTTPS 连通性
-│   └── 📄 test_project.ps1    # 自动化模拟发送项目测试用例
 │
 ├── 📁 workspace/              # 项目独立代码构建产物物理输出目录 (自动按 projectId 隔离)
 └── 📁 userdata/               # 独立项目运行会话数据目录 (按 projectId 隔离)
@@ -127,8 +116,6 @@ ai-orchestrator/
 | :--- | :--- | :--- |
 | **`backend/agents/planner.js`** | **策略脑 (Planner)** | 负责将用户的原始想法拆解为多步骤 `tasks`；在执行脑遇到技术瓶颈时提供答疑；每轮代码生成后对产物进行严格质量评估，决定是否开启下一轮迭代。 |
 | **`backend/agents/executor_bridge.js`** | **执行脑 (Executor Bridge)** | 跨环境唤醒桥接器。支持拉起本地谷歌 **Antigravity CLI/Agent** 独占窗口与 Session，或使用 OpenAI 兼容外接 API；动态注入当前选中 Skill 的硬约束指令，将实体代码落盘至 `workspace/<projectId>/`。 |
-| **`backend/agents/executor_bridge.py`** | **Python SDK 兼容桥** | 当环境使用 `google.antigravity` Python SDK 时，作为子进程提供 Python 级别的控制与返回值解析。 |
-
 ---
 
 ### 3. 🎯 技能定义库 (`backend/skills/`)
@@ -151,13 +138,12 @@ ai-orchestrator/
 
 ---
 
-### 5. 🛠️ 启动与探针工具 (`start.bat`, `start.sh`, `scripts/`)
+### 5. 🛠️ 启动工具 (`start.bat`, `start.sh`)
 
 | 文件路径 | 作用说明 |
 | :--- | :--- |
 | **`start.bat`** | Windows 一键启动脚本。自动清理 3000 端口占用，静默启动 Node 后端并自动拉起默认浏览器。 |
 | **`start.sh`** | Linux/macOS 一键启动 Shell 脚本。 |
-| **`scripts/*.ps1`** | 环境诊断探针。提供端口排查、进程 PID 追踪、API 连通性测试及自动化模拟用例。 |
 
 ---
 
