@@ -17,11 +17,11 @@ function getAntigravityCliPath() {
   const userProfile = process.env.USERPROFILE || '';
 
   const possiblePaths = [
+    `C:\\Users\\MRT~1\\AppData\\Local\\Programs\\Antigravity IDE\\bin\\antigravity-ide.cmd`,
     path.join(localAppData, 'Programs', 'Antigravity IDE', 'bin', 'antigravity-ide.cmd'),
     path.join(localAppData, 'Programs', 'Antigravity', 'bin', 'antigravity-ide.cmd'),
     path.join(localAppData, 'Programs', 'Antigravity', 'bin', 'agy.cmd'),
     path.join(userProfile, 'AppData', 'Local', 'Programs', 'Antigravity IDE', 'bin', 'antigravity-ide.cmd'),
-    `C:\\Users\\MRT~1\\AppData\\Local\\Programs\\Antigravity IDE\\bin\\antigravity-ide.cmd`,
     `C:\\Users\\MR T\\AppData\\Local\\Programs\\Antigravity IDE\\bin\\antigravity-ide.cmd`
   ];
 
@@ -67,8 +67,12 @@ function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = nul
     };
 
     const sendChatPrompt = () => {
-      const psChatCmd = `$p = Get-Content -Path '${promptFilePath.replace(/'/g, "''")}' -Raw -Encoding UTF8; & '${cli}' chat -r -m agent $p`;
-      const chatProc = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-Command', psChatCmd], {
+      // 强制使用 Windows 规范双引号包裹带有空格的路径，防止 cmd.exe 截断
+      const safeCli = `"${cli}"`;
+      const safePromptPath = `"${promptFilePath}"`;
+      const cmdChat = `""${cli}" chat -r -m agent ${safePromptPath}"`;
+
+      const chatProc = spawn('cmd.exe', ['/c', cmdChat], {
         stdio: ['ignore', 'pipe', 'pipe']
       });
 
@@ -117,8 +121,8 @@ function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = nul
       launchedProjectWindows.add(projectId);
       console.log(`🚀 首次为项目 [${projectId}] 唤醒独占 IDE 窗口 (工作区: ${workspaceDir}): ${cli}`);
 
-      // 使用 Start-Process 后台解耦拉起 IDE 进程
-      const psOpenCmd = `Start-Process -FilePath '${cli.replace(/'/g, "''")}' -ArgumentList '--disable-workspace-trust', '-n', '${workspaceDir.replace(/'/g, "''")}'`;
+      // 双引号包裹 Start-Process 参数
+      const psOpenCmd = `Start-Process -FilePath "${cli}" -ArgumentList "--disable-workspace-trust", "-n", "${workspaceDir}"`;
       const openProc = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-Command', psOpenCmd], {
         stdio: ['ignore', 'pipe', 'pipe']
       });
