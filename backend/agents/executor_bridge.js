@@ -13,12 +13,24 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 
 function getAntigravityCliPath() {
-  const shortPath = `C:\\Users\\MRT~1\\AppData\\Local\\Programs\\Antigravity IDE\\bin\\antigravity-ide.cmd`;
-  const customPath = `C:\\Users\\MR T\\AppData\\Local\\Programs\\Antigravity IDE\\bin\\antigravity-ide.cmd`;
-  try {
-    if (fs.existsSync(shortPath)) return shortPath;
-    if (fs.existsSync(customPath)) return customPath;
-  } catch {}
+  const localAppData = process.env.LOCALAPPDATA || '';
+  const userProfile = process.env.USERPROFILE || '';
+
+  const possiblePaths = [
+    path.join(localAppData, 'Programs', 'Antigravity IDE', 'bin', 'antigravity-ide.cmd'),
+    path.join(localAppData, 'Programs', 'Antigravity', 'bin', 'antigravity-ide.cmd'),
+    path.join(localAppData, 'Programs', 'Antigravity', 'bin', 'agy.cmd'),
+    path.join(userProfile, 'AppData', 'Local', 'Programs', 'Antigravity IDE', 'bin', 'antigravity-ide.cmd'),
+    `C:\\Users\\MRT~1\\AppData\\Local\\Programs\\Antigravity IDE\\bin\\antigravity-ide.cmd`,
+    `C:\\Users\\MR T\\AppData\\Local\\Programs\\Antigravity IDE\\bin\\antigravity-ide.cmd`
+  ];
+
+  for (const p of possiblePaths) {
+    try {
+      if (p && fs.existsSync(p)) return p;
+    } catch {}
+  }
+
   return 'antigravity-ide';
 }
 
@@ -71,7 +83,15 @@ function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = nul
         console.error('[Antigravity Agent]', d.toString());
       });
 
+      const timeoutTimer = setTimeout(() => {
+        console.warn(`[Antigravity CLI] 任务响应已达 180s 保护上限，自动收尾并交还编排器...`);
+        chatProc.kill();
+        cleanupTempFile();
+        resolve({ type: 'task_complete', output: output.trim() });
+      }, 180000);
+
       chatProc.on('close', (code) => {
+        clearTimeout(timeoutTimer);
         cleanupTempFile();
         const trimmedOutput = output.trim();
 
@@ -87,27 +107,26 @@ function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = nul
       });
 
       chatProc.on('error', (err) => {
+        clearTimeout(timeoutTimer);
         cleanupTempFile();
         reject(err);
       });
-
-      setTimeout(() => {
-        chatProc.kill();
-        cleanupTempFile();
-        resolve({ type: 'task_complete', output: output.trim() });
-      }, 15000);
     };
 
     if (isFirstLaunch) {
       launchedProjectWindows.add(projectId);
       console.log(`🚀 首次为项目 [${projectId}] 唤醒独占 IDE 窗口 (工作区: ${workspaceDir}): ${cli}`);
 
-      const psOpenCmd = `& '${cli}' --disable-workspace-trust -n '${workspaceDir}'`;
+      // 使用 Start-Process 后台解耦拉起 IDE 进程
+      const psOpenCmd = `Start-Process -FilePath '${cli.replace(/'/g, "''")}' -ArgumentList '--disable-workspace-trust', '-n', '${workspaceDir.replace(/'/g, "''")}'`;
       const openProc = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-Command', psOpenCmd], {
         stdio: ['ignore', 'pipe', 'pipe']
       });
 
-      openProc.on('close', sendChatPrompt);
+      openProc.on('close', () => {
+        // 给 IDE 视窗 2 秒建链等待
+        setTimeout(sendChatPrompt, 2000);
+      });
       openProc.on('error', (err) => {
         console.warn(`[IDE Window Spawn Warning]`, err.message);
         sendChatPrompt();

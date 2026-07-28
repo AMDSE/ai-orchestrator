@@ -451,9 +451,31 @@ textarea::placeholder { color: var(--text-muted); }
 .project-list-item:hover  { background: var(--bg-card-hover); border-color: var(--glass-border-h); }
 .project-list-item.active { border-color: var(--accent-blue); background: rgba(79,142,247,.08); }
 
-.pli-content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pli-content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .pli-title { font-size: 0.8rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pli-meta  { display: flex; align-items: center; gap: 8px; }
+.pli-meta  { display: flex; align-items: center; gap: 8px; font-size: 0.72rem; color: var(--text-secondary); }
+
+.pli-progress-bar {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+.pli-progress-fill {
+  height: 100%;
+  background: var(--accent-blue);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+.pli-progress-fill.fill-planning { background: var(--accent-blue); }
+.pli-progress-fill.fill-executing { background: var(--accent-green); }
+.pli-progress-fill.fill-waiting_answer { background: var(--accent-yellow); }
+.pli-progress-fill.fill-completed { background: var(--accent-green); }
+.pli-progress-fill.fill-stopped { background: #ff6b6b; }
+.pli-progress-fill.fill-error { background: var(--accent-red); }
+
 .pli-dot-right {
   display: flex; align-items: center; justify-content: center;
   margin-left: 10px; flex-shrink: 0;

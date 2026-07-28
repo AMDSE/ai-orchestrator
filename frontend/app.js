@@ -380,6 +380,9 @@ function handleServerMessage(msg) {
         break;
     }
 
+    // 无论是否跳过全量 DOM 销毁重绘，始终精准微调左侧列表项的进度与指示灯 UI
+    updateProjectListItemUI(projectId);
+
     // 高频 token/thought 传输时跳过 renderAll 全量 DOM 销毁重绘，提升流畅度
     if (!skipFullRender) {
       renderAll();
@@ -411,20 +414,47 @@ function renderProjectList() {
     list.innerHTML = `<div class="empty-state"><span>还没有项目</span><small>输入想法后点击启动</small></div>`;
     return;
   }
-  list.innerHTML = [...projects.values()].reverse().map(p => `
+  list.innerHTML = [...projects.values()].reverse().map(p => {
+    const progress = Math.round(p.progress || 0);
+    return `
     <div class="project-list-item ${selectedProjectId === p.id ? 'active' : ''}"
+         data-id="${p.id}"
          onclick="selectProject('${p.id}')">
       <div class="pli-content">
         <div class="pli-title">${p.plan?.title || p.userInput?.substring(0, 26) || '新项目'}${p.userInput?.length > 26 ? '…' : ''}</div>
         <div class="pli-meta">
-          <span class="pli-status-text">${statusLabel(p.status)} · ${Math.round(p.progress || 0)}% · 🔄 ${p.iteration || 1}/${p.maxIterations || 3}轮</span>
+          <span class="pli-status-text" id="pli-status-${p.id}">${statusLabel(p.status)} · ${progress}% · 🔄 ${p.iteration || 1}/${p.maxIterations || 3}轮</span>
+        </div>
+        <div class="pli-progress-bar">
+          <div class="pli-progress-fill fill-${p.status}" id="pli-bar-${p.id}" style="width:${progress}%"></div>
         </div>
       </div>
-      <div class="pli-dot-right">
+      <div class="pli-dot-right" id="pli-dot-${p.id}">
         ${statusIndicatorDotPure(p.status)}
       </div>
     </div>
-  `).join('');
+  `}).join('');
+}
+
+function updateProjectListItemUI(projectId) {
+  const p = projects.get(projectId);
+  if (!p) return;
+
+  const progress = Math.round(p.progress || 0);
+  const statusEl = document.getElementById(`pli-status-${projectId}`);
+  const barEl = document.getElementById(`pli-bar-${projectId}`);
+  const dotEl = document.getElementById(`pli-dot-${projectId}`);
+
+  if (statusEl) {
+    statusEl.textContent = `${statusLabel(p.status)} · ${progress}% · 🔄 ${p.iteration || 1}/${p.maxIterations || 3}轮`;
+  }
+  if (barEl) {
+    barEl.style.width = `${progress}%`;
+    barEl.className = `pli-progress-fill fill-${p.status}`;
+  }
+  if (dotEl) {
+    dotEl.innerHTML = statusIndicatorDotPure(p.status);
+  }
 }
 
 function renderProjectsGrid() {
