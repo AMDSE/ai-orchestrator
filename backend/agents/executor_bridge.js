@@ -67,13 +67,12 @@ function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = nul
     };
 
     const sendChatPrompt = () => {
-      // 强制使用 Windows 规范双引号包裹带有空格的路径，防止 cmd.exe 截断
-      const safeCli = `"${cli}"`;
+      // 强制使用 Windows 规范双引号包裹带有空格的路径，并管道输入 echo y | 自动应答交互式确认
       const safePromptPath = `"${promptFilePath}"`;
-      const cmdChat = `""${cli}" chat -r -m agent ${safePromptPath}"`;
+      const cmdChat = `echo y | ""${cli}" chat -r -m agent ${safePromptPath}"`;
 
       const chatProc = spawn('cmd.exe', ['/c', cmdChat], {
-        stdio: ['ignore', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe']
       });
 
       let output = '';
