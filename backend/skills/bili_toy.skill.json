@@ -28,7 +28,9 @@
     "支持粉丝关系 getFanRelation (关注解锁皮肤/充电解锁关卡)",
     "麦克风 requestMicrophone 在点击手势中发起，并用静音 audio 启动解码",
     "必须设置 viewport-fit=cover 与 touch-action: manipulation 禁下拉刷新",
-    "完全禁止绝对路径 (/assets/)、第三方登录阻断及外部占位图服务"
+    "完全禁止绝对路径 (/assets/)、第三方登录阻断及外部占位图服务",
+    "禁止使用 cdnjs, unpkg, fonts.googleapis.com 等大陆访问缓慢或被墙的外部 CDN，必须使用国内 CDN (如 cdn.bootcdn.net) 或直接内联代码",
+    "访问 localStorage 必须包裹在 try...catch 中，防止在沙盒 iframe 中因跨域异常直接抛错导致脚本终止、白屏或卡在加载界面"
   ],
   "forbiddenPatterns": [
     "dummyimage.com",
@@ -39,6 +41,10 @@
     "身份验证阻断",
     "直接写入非 String 类型的云存档 value",
     "在非用户点击事件中同步调用 requestMicrophone",
-    "未加 window.toy 存在的防判直接裸调 SDK 方法"
+    "未加 window.toy 存在的防判直接裸调 SDK 方法",
+    "cdnjs.cloudflare.com",
+    "unpkg.com",
+    "fonts.googleapis.com",
+    "裸调 localStorage (必须加 try/catch)"
   ]
 }

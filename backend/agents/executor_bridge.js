@@ -362,18 +362,30 @@ export function buildExecutorSystemPrompt(selectedSkill = 'bili_toy') {
 
 ${skillPrompt ? `${skillPrompt}\n` : ''}
 【绝对禁止事项 - 违反则视为任务失败】
-❌ 禁止：在任何游戏或应用中加入登录门禁、身份验证、账号绑定等阻断用户进入主功能的流程。游戏启动必须直接可玩，无需登录。
+❌ 禁止：在任何游戏或应用中加入登录门禁、身份验证等阻断用户进入主功能的流程。游戏启动必须直接可玩，无需登录。
 ❌ 禁止：使用 dummyimage.com、placeholder.com、placehold.it 或任何测试性占位图片服务。
 ❌ 禁止：在代码中硬编码本地不存在且无法访问的虚拟本地相对路径（如 dog.png）。
-❌ 禁止：输出手绘像素小人或极其粗糙的纯 SVG 拼接形状替代角色立绘！必须使用高品质网络素材/图床/DiceBear人像/Unsplash/Pixabay高清在线链接！
+❌ 禁止：输出手绘像素小人或极其粗糙的纯 SVG 拼接形状替代角色立绘！必须使用 DiceBear/Unsplash/Pixabay 高精网络素材！
 ❌ 禁止：输出纯文字描述或注释性内容，必须直接输出完整立即可运行的单文件 HTML5 代码。
 ❌ 禁止：在页面中保留任何调试文本、测试按钮、占位符内容。
+❌ 【致命Bug禁止】引入来自 cdnjs.cloudflare.com 或 unpkg.com 的任何外部 CDN 脚本！这些域名在国内访问极慢或超时，会导致页面永久卡在加载界面。如需 Howler.js，必须改用 Web Audio API 原生实现。
+❌ 【致命Bug禁止】引入 fonts.googleapis.com 字体 CDN！此域名在国内被墙。如需自定义字体，使用 system-ui, 'Noto Sans SC', sans-serif 等系统字体回退。
+❌ 【致命Bug禁止】将 B站 Toy SDK 或任何脚本设置为 defer 属性后再用 DOMContentLoaded 触发初始化！defer 脚本会阻塞 DOMContentLoaded 触发，导致 init 函数永远不执行、页面永久卡在加载界面！
+❌ 【致命Bug禁止】裸调 localStorage.getItem / setItem！必须全部包裹在 try-catch 中，否则在 blob:iframe 预览或隐私模式下会抛 SecurityError 导致整个脚本崩溃、加载界面永远不消失。
+
+【强制初始化安全模式 - 所有 HTML5 项目必须严格遵守】
+✅ 将 B站 Toy SDK 改为 async（不阻塞 DOMContentLoaded）：<script async src="https://s1.hdslb.com/bfs/seed/toy/app/sdk/toy-sdk.js"></script>
+✅ 初始化函数必须使用兼容写法，不能单纯依赖 DOMContentLoaded（因 defer 脚本会阻塞它）：
+   if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', () => initGame()); } else { initGame(); }
+✅ 所有 localStorage 必须包裹在 try-catch 中：
+   function safeGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+   function safeSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 
 【强制视觉美学与游戏级质量标准】
-✅ 素材高精化：必须积极调用高品质网络图床/CDN素材（如 Unsplash、DiceBear 矢量人像库、B站公开图床素材、FontAwesome/Lucide 图标库）。
-✅ 音效与视听包装：游戏类应用必须引入 Howler.js 或 Web Audio API 提供逼真的点击/跳转/关卡音效，背景可采用 Canvas 动态粒子特效。
-✅ 现代 UI 质感：使用现代化深色/炫彩渐变背景、毛玻璃视差（Glassmorphism）、微交互动画（Hover/Active 触感反馈）与 Google Fonts 现代字体。
-✅ 若制作 Galgame/视觉小说：必须包含≥50条对话节点、≥3个分支路线、≥2个不同结局，角色立绘必须使用高精网络素材/图床或 DiceBear HD 矢量人像，绝不使用粗糙像素画。
+✅ 素材高精化：必须积极调用 Unsplash、DiceBear 矢量人像库、B站公开图床素材。
+✅ 音效与视听包装：游戏类应用必须使用 Web Audio API（AudioContext）实现音效，背景可采用 Canvas 动态粒子特效。严禁通过 cdnjs 引入 Howler.js！
+✅ 现代 UI 质感：使用现代化深色/炫彩渐变背景、毛玻璃视差（Glassmorphism）、微交互动画。字体使用 system-ui 或国内可访问的字体。
+✅ 若制作 Galgame/视觉小说：必须包含≥50条对话节点、≥3个分支路线、≥2个不同结局，角色立绘必须使用 DiceBear HD 矢量人像，绝不使用粗糙像素画。
 ✅ 所有 Web 页面必须 mobile-first 双端适配（viewport meta + @media 媒体查询）。
 若遇到歧义，可用 [QUESTION_TO_PLANNER]提问[/QUESTION_TO_PLANNER]`;
 

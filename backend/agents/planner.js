@@ -189,6 +189,10 @@ export class PlannerAgent {
       // 1. 智能剥离图片 base64 等导致假死的无用超长二进制流
       safeOutput = safeOutput.replace(/data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/=]+/g, '[Base64图片数据已折叠]');
       safeOutput = safeOutput.replace(/data:audio\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/=]+/g, '[Base64音频数据已折叠]');
+      // 剥离可能导致审查极度缓慢甚至假死的内联 SVG 和超长图片标签
+      safeOutput = safeOutput.replace(/<svg[\s\S]*?<\/svg>/gi, '[SVG矢量图形已折叠以加速审查]');
+      safeOutput = safeOutput.replace(/<img[\s\S]*?>/gi, '[IMG图片标签已折叠]');
+      
       // 2. 软截断：依然过长的话掐头去尾
       if (safeOutput.length > 15000) {
         safeOutput = safeOutput.substring(0, 7000) + '\n\n...[代码过长已智能折叠中间部分]...\n\n' + safeOutput.substring(safeOutput.length - 7000);
