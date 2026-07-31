@@ -67,23 +67,34 @@ function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = nul
     };
 
     const sendChatPrompt = () => {
-      // 强制使用 Windows 规范双引号包裹带有空格的路径，并管道输入 echo y | 自动应答交互式确认
       const safePromptPath = `"${promptFilePath}"`;
-      const cmdChat = `echo y | ""${cli}" chat -r -m agent ${safePromptPath}"`;
+      const cmdChat = `""${cli}" chat -r -m agent ${safePromptPath}"`;
 
       const chatProc = spawn('cmd.exe', ['/c', cmdChat], {
         stdio: ['pipe', 'pipe', 'pipe']
       });
+
+      // 预发射一次确认，以防启动时即询问
+      setTimeout(() => {
+        try { chatProc.stdin.write('y\r\n'); } catch (e) {}
+      }, 800);
 
       let output = '';
       chatProc.stdout.on('data', (d) => {
         const token = d.toString();
         output += token;
         if (onToken) onToken(token);
+        if (token.includes('请确认') || token.includes('[y/N]') || token.includes('覆盖') || token.includes('Y/n')) {
+          try { chatProc.stdin.write('y\r\n'); } catch (e) {}
+        }
       });
 
       chatProc.stderr.on('data', (d) => {
-        console.error('[Antigravity Agent]', d.toString());
+        const text = d.toString();
+        console.error('[Antigravity Agent]', text);
+        if (text.includes('请确认') || text.includes('[y/N]') || text.includes('覆盖') || text.includes('Y/n')) {
+          try { chatProc.stdin.write('y\r\n'); } catch (e) {}
+        }
       });
 
       const timeoutTimer = setTimeout(() => {
