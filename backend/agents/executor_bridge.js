@@ -372,8 +372,17 @@ export function buildExecutorPrompt(plan, task, plannerAnswer = null, selectedSk
     ? `\n【当前技能禁止项】\n${forbiddenPatterns.map(r => `❌ ${r}`).join('\n')}`
     : '';
 
+  const assetBlock = `\n【推荐高精素材与在线图床 URL 列表 (请直接写入 <img> 或 CSS background-image)】
+- 🌆 赛博/游戏炫彩背景: https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80
+- 🌃 电竞/暗黑风格背景: https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80
+- 🐶 萌宠/大狗高精立绘: https://api.dicebear.com/7.x/bottts/svg?seed=hero_dog
+- ⚔️ 勇者/主角高精立绘: https://api.dicebear.com/7.x/adventurer/svg?seed=hero_master
+- 🎮 UP主/玩家高精立绘: https://api.dicebear.com/7.x/avataaars/svg?seed=bilibili_up
+- 😆 搞笑热梗表情立绘: https://api.dicebear.com/7.x/big-smile/svg?seed=funny_meme
+- 💎 道具/水晶晶体元素: https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80`;
+
   if (plannerAnswer) {
-    return `项目：${plan?.title || '项目'}\n任务 ${task.id}：${task.title}\n描述：${task.description}\n预期输出：${task.expected_output || '完整实体代码/文件'}\n\n【策略脑指导更新】策略脑对你之前提问的解决方案：\n${plannerAnswer}\n\n请结合策略脑的专业指导，继续完成上述任务。${rulesBlock}${forbidBlock}`;
+    return `项目：${plan?.title || '项目'}\n任务 ${task.id}：${task.title}\n描述：${task.description}\n预期输出：${task.expected_output || '完整实体代码/文件'}\n\n【策略脑指导更新】策略脑对你之前提问的解决方案：\n${plannerAnswer}\n\n请结合策略脑的专业指导，继续完成上述任务。${rulesBlock}${forbidBlock}${assetBlock}`;
   }
-  return `项目：${plan?.title || '项目'}\n任务 ${task.id}：${task.title}\n描述：${task.description}\n预期输出：${task.expected_output || '完整实体代码/文件'}${rulesBlock}${forbidBlock}`;
+  return `项目：${plan?.title || '项目'}\n任务 ${task.id}：${task.title}\n描述：${task.description}\n预期输出：${task.expected_output || '完整实体代码/文件'}${rulesBlock}${forbidBlock}${assetBlock}`;
 }

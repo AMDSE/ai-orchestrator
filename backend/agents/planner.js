@@ -3,6 +3,7 @@
 
 import OpenAI from 'openai';
 import 'dotenv/config';
+import { searchWeb, searchImageAssets } from '../services/search_service.js';
 
 const defaultClient = new OpenAI({
   apiKey: process.env.LONGCAT_API_KEY,
@@ -116,10 +117,21 @@ export class PlannerAgent {
     const history = this._getHistory(projectId, webSearch);
 
     if (prompt) {
-      const searchTag = webSearch
-        ? "\n\n[🌐 强制系统提示: 策略脑联网功能已启用。本次对话必须强制调用实时联网检索，积极检索整合互联网最新技术文档与行业动态数据后给出回答]"
-        : "";
-      history.push({ role: 'user', content: prompt + searchTag });
+      let realSearchContext = '';
+      if (webSearch) {
+        try {
+          console.log(`[Planner Engine] 正在拉起真实联网检索与高精图片资源库 (Asset Registry)...`);
+          const [webData, assetData] = await Promise.all([
+            searchWeb(prompt),
+            searchImageAssets(prompt)
+          ]);
+          realSearchContext = `\n\n[🌐 真实联网最新检索资讯 (实测数据)]:\n${webData}\n\n${assetData}`;
+        } catch (e) {
+          console.warn('[Planner Engine] 真实检索异常，降级处理:', e.message);
+        }
+      }
+
+      history.push({ role: 'user', content: prompt + realSearchContext });
     }
 
     const { client, model } = this._getClientAndModel(plannerConfig);
