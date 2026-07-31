@@ -429,7 +429,7 @@ function renderProjectList() {
          data-id="${p.id}"
          onclick="selectProject('${p.id}')">
       <div class="pli-content">
-        <div class="pli-title">${p.plan?.title || p.userInput?.substring(0, 26) || '新项目'}${p.userInput?.length > 26 ? '…' : ''}</div>
+        <div class="pli-title" id="pli-title-${p.id}">${p.plan?.title || p.userInput?.substring(0, 26) || '新项目'}${p.userInput?.length > 26 && !p.plan?.title ? '…' : ''}</div>
         <div class="pli-meta">
           <span class="pli-status-text" id="pli-status-${p.id}">${statusLabel(p.status)} · ${progress}% · 🔄 ${p.iteration || 1}/${p.maxIterations || 3}轮</span>
         </div>
@@ -439,6 +439,9 @@ function renderProjectList() {
       </div>
       <div class="pli-dot-right" id="pli-dot-${p.id}">
         ${statusIndicatorDotPure(p.status)}
+      </div>
+      <div class="pli-delete-wrapper">
+        <span class="pli-delete-btn" onclick="deleteProject('${p.id}', event)" title="删除项目">🗑️</span>
       </div>
     </div>
   `}).join('');
@@ -452,7 +455,12 @@ function updateProjectListItemUI(projectId) {
   const statusEl = document.getElementById(`pli-status-${projectId}`);
   const barEl = document.getElementById(`pli-bar-${projectId}`);
   const dotEl = document.getElementById(`pli-dot-${projectId}`);
+  const titleEl = document.getElementById(`pli-title-${projectId}`);
 
+  if (titleEl) {
+    const isLong = p.userInput?.length > 26 && !p.plan?.title;
+    titleEl.textContent = `${p.plan?.title || p.userInput?.substring(0, 26) || '新项目'}${isLong ? '…' : ''}`;
+  }
   if (statusEl) {
     statusEl.textContent = `${statusLabel(p.status)} · ${progress}% · 🔄 ${p.iteration || 1}/${p.maxIterations || 3}轮`;
   }

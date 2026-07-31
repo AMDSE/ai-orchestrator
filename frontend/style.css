@@ -481,6 +481,20 @@ textarea::placeholder { color: var(--text-muted); }
   margin-left: 10px; flex-shrink: 0;
 }
 
+.pli-delete-wrapper {
+  display: flex; align-items: center; justify-content: center;
+  margin-left: 6px; opacity: 0; transition: opacity 0.2s;
+}
+.project-list-item:hover .pli-delete-wrapper { opacity: 1; }
+
+.pli-delete-btn {
+  cursor: pointer; font-size: 0.85rem; padding: 4px;
+  border-radius: 4px; transition: background 0.2s;
+}
+.pli-delete-btn:hover {
+  background: rgba(255, 107, 107, 0.2);
+}
+
 .status-dot {
   width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
 }
