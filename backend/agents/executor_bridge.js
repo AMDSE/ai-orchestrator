@@ -45,6 +45,15 @@ function isAntigravityCliAvailable() {
   }
 }
 
+/**
+ * 将包含空格的 Windows 路径转换为 8.3 短路径 (如 MR T -> MRT~1)，解决 CMD/PowerShell 剥离引号导致的路径截断死锁 Bug
+ */
+function toShortPath(p) {
+  if (!p || typeof p !== 'string') return p;
+  return p.replace(/\\Users\\MR T\\/gi, '\\Users\\MRT~1\\')
+          .replace(/\\Users\\MR\s+T\\/gi, '\\Users\\MRT~1\\');
+}
+
 
 
 // 跟踪已为哪些项目拉起过独占 IDE 窗口，防止后续任务/迭代反复弹窗
@@ -67,9 +76,10 @@ function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = nul
     };
 
     const sendChatPrompt = () => {
-      const safePromptPath = `"${promptFilePath}"`;
-      // 强制设置控制台编码为 UTF-8 (65001)，解决中文乱码导致 prompt 检测失败的问题
-      const cmdChat = `chcp 65001 >nul & ""${cli}" chat -r -m agent ${safePromptPath}"`;
+      const shortCli = toShortPath(cli);
+      const shortPromptPath = toShortPath(promptFilePath);
+      // 强制设置控制台编码为 UTF-8 (65001)，使用短路径规避 CMD 剥离引号死锁
+      const cmdChat = `chcp 65001 >nul & "${shortCli}" chat -r -m agent "${shortPromptPath}"`;
 
       const chatProc = spawn('cmd.exe', ['/c', cmdChat], {
         stdio: ['pipe', 'pipe', 'pipe']
@@ -147,10 +157,12 @@ function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = nul
 
     if (isFirstLaunch) {
       launchedProjectWindows.add(projectId);
-      console.log(`🚀 首次为项目 [${projectId}] 唤醒独占 IDE 窗口 (工作区: ${workspaceDir}): ${cli}`);
+      const shortCli = toShortPath(cli);
+      const shortWorkspaceDir = toShortPath(workspaceDir);
+      console.log(`🚀 首次为项目 [${projectId}] 唤醒独占 IDE 窗口 (工作区: ${shortWorkspaceDir}): ${shortCli}`);
 
-      // 双引号包裹 Start-Process 参数
-      const psOpenCmd = `Start-Process -FilePath "${cli}" -ArgumentList "--disable-workspace-trust", "-n", "${workspaceDir}"`;
+      // 双引号包裹 Start-Process 参数 (使用短路径防空格)
+      const psOpenCmd = `Start-Process -FilePath "${shortCli}" -ArgumentList "--disable-workspace-trust", "-n", "${shortWorkspaceDir}"`;
       const openProc = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-Command', psOpenCmd], {
         stdio: ['ignore', 'pipe', 'pipe']
       });
