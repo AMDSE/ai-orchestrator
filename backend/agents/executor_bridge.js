@@ -75,9 +75,18 @@ function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = nul
         stdio: ['pipe', 'pipe', 'pipe']
       });
 
+      // 捕获 stdin 的 EPIPE 错误，防止管道关闭时写入触发未捕获异常导致服务器崩溃
+      if (chatProc.stdin) {
+        chatProc.stdin.on('error', () => {});
+      }
+
       // 预发射一次确认，以防启动时即询问
       setTimeout(() => {
-        try { chatProc.stdin.write('y\r\n'); } catch (e) {}
+        try {
+          if (chatProc.stdin && chatProc.stdin.writable) {
+            chatProc.stdin.write('y\r\n');
+          }
+        } catch (e) {}
       }, 800);
 
       let output = '';
@@ -85,7 +94,11 @@ function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = nul
       
       const checkAndFeedY = (text) => {
         if (promptKeywords.some(kw => text.includes(kw))) {
-          try { chatProc.stdin.write('y\r\n'); } catch (e) {}
+          try {
+            if (chatProc.stdin && chatProc.stdin.writable) {
+              chatProc.stdin.write('y\r\n');
+            }
+          } catch (e) {}
         }
       };
 
