@@ -68,7 +68,8 @@ function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = nul
 
     const sendChatPrompt = () => {
       const safePromptPath = `"${promptFilePath}"`;
-      const cmdChat = `""${cli}" chat -r -m agent ${safePromptPath}"`;
+      // 强制设置控制台编码为 UTF-8 (65001)，解决中文乱码导致 prompt 检测失败的问题
+      const cmdChat = `chcp 65001 >nul & ""${cli}" chat -r -m agent ${safePromptPath}"`;
 
       const chatProc = spawn('cmd.exe', ['/c', cmdChat], {
         stdio: ['pipe', 'pipe', 'pipe']
@@ -80,21 +81,25 @@ function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = nul
       }, 800);
 
       let output = '';
+      const promptKeywords = ['请确认', '[y/n]', '[y/N]', 'y/N', 'Y/n', '覆盖', 'overwrite', 'Overwrite', 'confirm', 'Confirm', '', 'ļ', 'ȷ'];
+      
+      const checkAndFeedY = (text) => {
+        if (promptKeywords.some(kw => text.includes(kw))) {
+          try { chatProc.stdin.write('y\r\n'); } catch (e) {}
+        }
+      };
+
       chatProc.stdout.on('data', (d) => {
         const token = d.toString();
         output += token;
         if (onToken) onToken(token);
-        if (token.includes('请确认') || token.includes('[y/N]') || token.includes('覆盖') || token.includes('Y/n')) {
-          try { chatProc.stdin.write('y\r\n'); } catch (e) {}
-        }
+        checkAndFeedY(token);
       });
 
       chatProc.stderr.on('data', (d) => {
         const text = d.toString();
         console.error('[Antigravity Agent]', text);
-        if (text.includes('请确认') || text.includes('[y/N]') || text.includes('覆盖') || text.includes('Y/n')) {
-          try { chatProc.stdin.write('y\r\n'); } catch (e) {}
-        }
+        checkAndFeedY(text);
       });
 
       const timeoutTimer = setTimeout(() => {

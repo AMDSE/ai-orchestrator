@@ -128,7 +128,7 @@ export class PlannerAgent {
       messages: history,
       temperature: 0.7,
       stream: true,
-    }, { signal: signal || undefined });
+    }, { signal: signal || undefined, timeout: 60000 });
 
     const chunks = [];
     for await (const chunk of stream) {
@@ -170,7 +170,17 @@ export class PlannerAgent {
   }
 
   async reviewExecution(projectId, currentIteration, maxIterations, tasks, plannerConfig = null, onChunk = null, signal = null) {
-    const outputsText = (tasks || []).map(t => `### 任务 ${t.id}: ${t.title}\n描述: ${t.description}\n预期输出: ${t.expected_output || ''}\n执行产物:\n${t.output || '未产生文本'}`).join('\n\n');
+    const outputsText = (tasks || []).map(t => {
+      let safeOutput = t.output || '未产生文本';
+      // 1. 智能剥离图片 base64 等导致假死的无用超长二进制流
+      safeOutput = safeOutput.replace(/data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/=]+/g, '[Base64图片数据已折叠]');
+      safeOutput = safeOutput.replace(/data:audio\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/=]+/g, '[Base64音频数据已折叠]');
+      // 2. 软截断：依然过长的话掐头去尾
+      if (safeOutput.length > 15000) {
+        safeOutput = safeOutput.substring(0, 7000) + '\n\n...[代码过长已智能折叠中间部分]...\n\n' + safeOutput.substring(safeOutput.length - 7000);
+      }
+      return `### 任务 ${t.id}: ${t.title}\n描述: ${t.description}\n预期输出: ${t.expected_output || ''}\n执行产物:\n${safeOutput}`;
+    }).join('\n\n');
     const prompt = `【系统信号：执行脑已完成第 ${currentIteration} 轮代码方案构建】
 当前为第 ${currentIteration} 轮迭代 (设定上限为 ${maxIterations} 轮)。
 请策略脑对照用户原始需求，对以下执行脑产物进行深度质量审查与瑕疵检验：
