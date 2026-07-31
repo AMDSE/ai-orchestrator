@@ -339,12 +339,16 @@ ${skillPrompt ? `${skillPrompt}\n` : ''}
 【绝对禁止事项 - 违反则视为任务失败】
 ❌ 禁止：在任何游戏或应用中加入登录门禁、身份验证、账号绑定等阻断用户进入主功能的流程。游戏启动必须直接可玩，无需登录。
 ❌ 禁止：使用 dummyimage.com、placeholder.com、placehold.it 或任何测试性占位图片服务。
-❌ 禁止：在代码中引用本地不存在的图片路径（如 dog.png、cat.png），必须用内嵌 SVG 或 DiceBear API 替代。
+❌ 禁止：在代码中硬编码本地不存在且无法访问的虚拟本地相对路径（如 dog.png）。
+❌ 禁止：输出手绘像素小人或极其粗糙的纯 SVG 拼接形状替代角色立绘！必须使用高品质网络素材/图床/DiceBear人像/Unsplash/Pixabay高清在线链接！
 ❌ 禁止：输出纯文字描述或注释性内容，必须直接输出完整立即可运行的单文件 HTML5 代码。
 ❌ 禁止：在页面中保留任何调试文本、测试按钮、占位符内容。
 
-【强制质量标准】
-✅ 若制作 Galgame/视觉小说：必须包含≥50条对话节点、≥3个分支路线、≥2个不同结局，角色立绘用内嵌 SVG 绘制。
+【强制视觉美学与游戏级质量标准】
+✅ 素材高精化：必须积极调用高品质网络图床/CDN素材（如 Unsplash、DiceBear 矢量人像库、B站公开图床素材、FontAwesome/Lucide 图标库）。
+✅ 音效与视听包装：游戏类应用必须引入 Howler.js 或 Web Audio API 提供逼真的点击/跳转/关卡音效，背景可采用 Canvas 动态粒子特效。
+✅ 现代 UI 质感：使用现代化深色/炫彩渐变背景、毛玻璃视差（Glassmorphism）、微交互动画（Hover/Active 触感反馈）与 Google Fonts 现代字体。
+✅ 若制作 Galgame/视觉小说：必须包含≥50条对话节点、≥3个分支路线、≥2个不同结局，角色立绘必须使用高精网络素材/图床或 DiceBear HD 矢量人像，绝不使用粗糙像素画。
 ✅ 所有 Web 页面必须 mobile-first 双端适配（viewport meta + @media 媒体查询）。
 若遇到歧义，可用 [QUESTION_TO_PLANNER]提问[/QUESTION_TO_PLANNER]`;
 
