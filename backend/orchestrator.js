@@ -7,6 +7,14 @@ import { executeTask, buildExecutorPrompt } from './agents/executor_bridge.js';
 import OpenAI from 'openai';
 import 'dotenv/config';
 
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const userdataDir = path.join(__dirname, '..', 'userdata');
+const projectsFilePath = path.join(userdataDir, 'projects.json');
+
 export const ProjectStatus = {
   IDLE: 'idle',
   PLANNING: 'planning',       // 策略脑规划中
@@ -30,9 +38,87 @@ export class Orchestrator extends EventEmitter {
     this.maxParallel = 3;
     this.activeCount = 0;
     this.queue = [];
+
+    // 初始化时自动加载与无损恢复磁盘项目记录
+    this._loadProjectsFromDisk();
+  }
+
+  _loadProjectsFromDisk() {
+    try {
+      if (!fs.existsSync(userdataDir)) {
+        fs.mkdirSync(userdataDir, { recursive: true });
+      }
+
+      if (fs.existsSync(projectsFilePath)) {
+        const raw = fs.readFileSync(projectsFilePath, 'utf-8');
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          for (const p of list) {
+            if (['planning', 'executing', 'waiting_answer'].includes(p.status)) {
+              p.status = ProjectStatus.STOPPED;
+            }
+            this.projects.set(p.id, p);
+          }
+        }
+      }
+
+      // 从 workspace 物理目录智能反补恢复缺失的项目记录
+      const workspaceBase = path.join(__dirname, '..', 'workspace');
+      if (fs.existsSync(workspaceBase)) {
+        const dirs = fs.readdirSync(workspaceBase);
+        for (const dirName of dirs) {
+          if (!this.projects.has(dirName)) {
+            const dirPath = path.join(workspaceBase, dirName);
+            try {
+              if (fs.statSync(dirPath).isDirectory()) {
+                const htmlPath = path.join(dirPath, 'index.html');
+                let htmlContent = null;
+                if (fs.existsSync(htmlPath)) {
+                  try { htmlContent = fs.readFileSync(htmlPath, 'utf-8'); } catch(e) {}
+                }
+                const recoveredProject = {
+                  id: dirName,
+                  userInput: `工作区历史项目 (${dirName.substring(0, 8)})`,
+                  mode: 'standard',
+                  selectedSkill: 'bili_toy',
+                  status: ProjectStatus.COMPLETED,
+                  plan: { title: `构建产物 (${dirName.substring(0, 8)})`, summary: '从工作区恢复的历史成果' },
+                  tasks: [{ id: 1, title: '实体代码构建', output: htmlContent || '完整 HTML5 应用' }],
+                  messages: [{ role: 'system', content: '🎉 已从工作区目录无损恢复项目记录', timestamp: new Date().toISOString() }],
+                  iteration: 1,
+                  maxIterations: 3,
+                  progress: 100,
+                  result: htmlContent || '项目代码已构建',
+                  createdAt: new Date().toISOString(),
+                  completedAt: new Date().toISOString()
+                };
+                this.projects.set(dirName, recoveredProject);
+              }
+            } catch(e) {}
+          }
+        }
+      }
+
+      console.log(`[Orchestrator] ✅ 已无损恢复 ${this.projects.size} 个历史项目记录`);
+    } catch (e) {
+      console.warn('[Orchestrator] 读取/恢复历史项目记录失败:', e.message);
+    }
+  }
+
+  _saveProjectsToDisk() {
+    try {
+      if (!fs.existsSync(userdataDir)) {
+        fs.mkdirSync(userdataDir, { recursive: true });
+      }
+      const list = Array.from(this.projects.values());
+      fs.writeFileSync(projectsFilePath, JSON.stringify(list, null, 2), 'utf-8');
+    } catch (e) {
+      console.warn('[Orchestrator] 持久化项目记录失败:', e.message);
+    }
   }
 
   _emit(projectId, type, data) {
+    this._saveProjectsToDisk();
     this.emit('update', { projectId, type, data, timestamp: new Date().toISOString() });
   }
 
@@ -430,5 +516,6 @@ export class Orchestrator extends EventEmitter {
     this.abortControllers.delete(projectId);
     this.planner.clearHistory(projectId);
     this.projects.delete(projectId);
+    this._saveProjectsToDisk();
   }
 }

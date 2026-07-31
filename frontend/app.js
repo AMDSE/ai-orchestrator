@@ -241,6 +241,7 @@ function connectWS() {
 
 function handleServerMessage(msg) {
   if (msg.type === 'init') {
+    projects.clear();
     for (const project of msg.projects) {
       projects.set(project.id, project);
     }
@@ -248,6 +249,13 @@ function handleServerMessage(msg) {
       renderSkillsList(msg.skills);
     }
     renderAll();
+
+    if (!selectedProjectId && projects.size > 0) {
+      const latestProject = [...projects.values()].reverse()[0];
+      if (latestProject) selectProject(latestProject.id);
+    } else if (selectedProjectId && projects.has(selectedProjectId)) {
+      selectProject(selectedProjectId);
+    }
     return;
   }
 
