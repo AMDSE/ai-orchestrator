@@ -1,21 +1,34 @@
 {
   "id": "bili_toy",
-  "name": "🎮 B站 Toy 互动规范",
+  "name": "🎮 B站 Toy 互动规范 (v2.0 官方全量版)",
   "icon": "🎮",
-  "description": "包含：相对路径 ./assets/、Data URL/SVG 防白屏保障、无阻断直接可玩、B站 Toy 标准打包结构。",
-  "version": "1.2.0",
+  "description": "包含：Toy SDK 全 API (云存档A/B双缓冲、排行榜、粉丝关注与充电联锁、麦克风录音)、多端双自适应布局、Agent CLI 部署规范与相对路径防白屏保底。",
+  "version": "2.0.0",
   "targetPlatform": "bilibili Toy H5",
   "builtIn": true,
   "sourceDocs": [
+    "https://www.bilibili.com/toy/toy-new-up-guide/index.html",
+    "https://www.bilibili.com/toy/toy-upload-update-playbook/index.html",
     "https://www.bilibili.com/toy/publish/sdk",
-    "https://www.bilibili.com/toy/toy-new-up-guide/index.html"
+    "https://www.bilibili.com/toy/toy-responsive-demo/index.html",
+    "https://www.bilibili.com/toy/toy-creator-explainer/index.html",
+    "https://www.bilibili.com/toy/toy-use-case-gallery/index.html",
+    "https://www.bilibili.com/toy/toy-cloud-save-lab/index.html",
+    "https://www.bilibili.com/toy/doodle-hop-sdk-demo/index.html",
+    "https://www.bilibili.com/toy/microphone-recorder-test/index.html"
   ],
-  "systemPrompt": "【🎮 bilibili Toy 平台交互规范技能（已启用）】\n1. 所有图片/样式/静态资源必须采用相对路径引用（如 ./assets/chara.png 或 assets/chara.png），严禁使用绝对路径（如 /assets/）。\n2. 保底防白屏机制：页面内必须包含内嵌 SVG 或 Data URL 备用资源，确保离开在线 CDN 也能流畅运行。\n3. 代码结构符合 B端 Toy 打包与发布规范，必须可在最外层通过 index.html 打开。\n4. 角色立绘强制使用内嵌 SVG 矢量绘图，或通过 https://api.dicebear.com/7.x/anime/svg?seed=角色名 加载。",
+  "systemPrompt": "【🎮 bilibili Toy 平台交互与 SDK 全量开发规范 (v2.0 官方集成版)】\n\n一、 静态资源与文件打包规约\n1. 最外层根目录必须包含 `index.html`，符合 B站 Toy 解压即跑打包标准。\n2. 所有静态资源引用（图片、CSS、JS、音频）必须采用相对路径（如 `./assets/chara.png` 或 `assets/styles.css`），绝对禁止使用根路径（如 `/assets/`），避免 B站 Webview 托管环境下出现 404 或白屏。\n3. 保底防白屏机制：关键图像与角色立绘必须提供 Inline SVG 或 Data URL (Base64) 备用方案，保证离线或 CDN 不可用时页面功能正常。\n4. 严格禁止引入任何第三方登录门禁或身份验证阻断，应用启动必须无缝可玩。\n\n二、 官方 SDK 引入与防御性调用范式 (`window.toy`)\n1. HTML `<head>` 中必须引入官方 SDK 脚本：\n   `<script defer src=\"https://s1.hdslb.com/bfs/seed/toy/app/sdk/toy-sdk.js\"></script>`\n2. 所有 SDK 方法调用前必须进行防御性能力检查，防止非 Toy 环境崩溃：\n   `if (window.toy && typeof window.toy.getCloudStorage === 'function') { ... }`\n3. 所有 SDK 方法均返回 Promise，必须配合 `await` 或 `.then()` 使用。\n\n三、 核心 SDK 功能模块实现规范\n1. 云存档 (Cloud Storage - `getCloudStorage` / `setCloudStorage`):\n   - 云存档按“登录用户 + 当前 Toy”强隔离，`setCloudStorage` 的 `value` 必须为字符串类型（如 `String(num)` 或 `JSON.stringify(obj)`）。\n   - 大文件/复杂存档解法：采用 A/B 双缓冲槽（`slot_a`, `slot_b`, `active_slot` + 时间戳/校验码）防止网络中断导致数据损坏；若体积过大，必须按 4KB 进行分片存储（`chunk_0`, `chunk_1`, `chunk_count`）。\n2. 排行榜 (Leaderboard - `submitScore` / `getLeaderboard`):\n   - 提交成绩：`window.toy.submitScore({ leaderboardId: 'main', score: scoreNumber })`\n   - 读取榜单：`window.toy.getLeaderboard({ leaderboardId: 'main', type: 'total', limit: 50 })` （支持 'total'/'daily'/'weekly'/'monthly'）。\n3. 粉丝关系与视频互动 (`getFanRelation` / `getAuthorVideoInfo`):\n   - 读取关系：`const { isFollowed, isCharged } = await window.toy.getFanRelation()`\n   - 互动玩法：支持“关注作者解锁追更皮肤/专属披风”、“点赞/充电发射火箭/解锁特别关卡”。\n4. 麦克风授权与 Web Audio 音频采集 (`requestMicrophone`):\n   - 申请麦克风授权必须在用户手势点击事件（User Gesture）的同步调用链中发起：`const stream = await window.toy.requestMicrophone()`。\n   - 必须通过静音 `<audio>` 节点启动 Chromium WebRTC 音轨解码：`sink.autoplay = true; sink.muted = true; sink.srcObject = stream; await sink.play();`。\n   - 配合 `AudioContext` 与 `AnalyserNode` 计算 RMS/dBFS 实时相对电平 (`20 * Math.log10(RMS)`），通过 `MediaRecorder` 生成 Blob 回放放音。\n\n四、 移动端与多设备响应式适配\n1. HTML 必须设置 Viewport：\n   `<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">`\n2. 采用 CSS Flexbox/Grid 弹性布局与 `@media (orientation: portrait)`、`@media (max-width: 768px)` 或 Container Queries 实现横竖屏/双端自适应。\n3. 触控优化：设置 `touch-action: manipulation; overscroll-behavior: none;` 禁止页面下拉刷新与非法手势吞掉游戏操作，同时兼容 `touchstart`/`touchend` 与 Mouse 事件。\n\n五、 Agent 部署与发布工具包\n1. 项目中兼容 `.agents/skills/bili-toy-publisher` 目录与 `SKILL.md` 指引。\n2. 部署操作推荐优先使用内置 Toy CLI 流程：生成 preview 预览链接供确认无误后再最终提交。",
   "qualityRules": [
-    "所有静态资源使用 ./assets/ 相对路径",
-    "必须包含 inline SVG 或 Data URL 防白屏保底",
-    "代码结构根目录有 index.html 可直接打开",
-    "角色/图片使用 SVG 或 DiceBear，不使用外部图片 URL"
+    "根目录必须包含 index.html 且所有静态资源使用 ./assets/ 相对路径",
+    "HTML head 引入 https://s1.hdslb.com/bfs/seed/toy/app/sdk/toy-sdk.js",
+    "所有 window.toy 方法调用做防御性 if (window.toy && typeof ...) 检测",
+    "云存档 setCloudStorage 的 value 强制转为 String 或 JSON.stringify",
+    "复杂云存档支持 A/B 双缓冲 (slot_a/slot_b) 与分片存储 (chunk_0/1)",
+    "排行榜 submitScore 和 getLeaderboard 正确传入 leaderboardId 与 score",
+    "支持粉丝关系 getFanRelation (关注解锁皮肤/充电解锁关卡)",
+    "麦克风 requestMicrophone 在点击手势中发起，并用静音 audio 启动解码",
+    "必须设置 viewport-fit=cover 与 touch-action: manipulation 禁下拉刷新",
+    "完全禁止绝对路径 (/assets/)、第三方登录阻断及外部占位图服务"
   ],
   "forbiddenPatterns": [
     "dummyimage.com",
@@ -23,6 +36,9 @@
     "placehold.it",
     "/assets/ (绝对路径前缀)",
     "login gate",
-    "身份验证阻断"
+    "身份验证阻断",
+    "直接写入非 String 类型的云存档 value",
+    "在非用户点击事件中同步调用 requestMicrophone",
+    "未加 window.toy 存在的防判直接裸调 SDK 方法"
   ]
 }
