@@ -83,7 +83,7 @@ export class PlannerAgent {
   }
 
   _getClientAndModel(plannerConfig) {
-    if (plannerConfig && plannerConfig.type === 'custom_api' && plannerConfig.apiKey) {
+    if (plannerConfig && (plannerConfig.provider === 'custom_api' || plannerConfig.type === 'custom_api') && plannerConfig.apiKey) {
       const customClient = new OpenAI({
         apiKey: plannerConfig.apiKey,
         baseURL: plannerConfig.baseUrl || 'https://api.openai.com/v1',
@@ -94,9 +94,10 @@ export class PlannerAgent {
       };
     }
 
+    // 自带/内置模式强统一为环境配置的 LongCat 模型，规避向 LongCat 端点透传非 LongCat 模型导致的 400 错误
     return {
       client: defaultClient,
-      model: plannerConfig?.model || process.env.LONGCAT_MODEL || 'LongCat-2.0'
+      model: process.env.LONGCAT_MODEL || 'LongCat-2.0'
     };
   }
 
