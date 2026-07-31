@@ -927,6 +927,23 @@ textarea::placeholder { color: var(--text-muted); }
   background: linear-gradient(135deg, rgba(255, 75, 75, 0.45), rgba(200, 0, 0, 0.4));
   transform: translateY(-1px);
 }
+/* 🔄 重试按钮 */
+.btn-retry {
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, rgba(79, 142, 247, 0.25), rgba(0, 161, 214, 0.2));
+  border: 1px solid rgba(79, 142, 247, 0.5);
+  color: var(--accent-blue);
+  font-weight: 600; font-size: 0.85rem;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+.btn-retry:hover {
+  background: linear-gradient(135deg, rgba(79, 142, 247, 0.45), rgba(0, 161, 214, 0.4));
+  transform: translateY(-1px);
+}
 @keyframes pulse-red {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255, 75, 75, 0); }
   50% { box-shadow: 0 0 0 4px rgba(255, 75, 75, 0.25); }

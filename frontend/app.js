@@ -572,6 +572,17 @@ async function stopGeneration() {
   }
 }
 
+// ── 🔄 重试/恢复当前项目生成 ──────────────────────────────────────────────────
+async function retryProject() {
+  if (!selectedProjectId) return;
+  try {
+    await fetch(`${API_URL}/api/projects/${selectedProjectId}/retry`, { method: 'POST' });
+    showToast('🔄 已发出继续执行指令', 'info');
+  } catch (e) {
+    showToast('重试失败：' + e.message, 'error');
+  }
+}
+
 // ── @ 指令提示菜单 ────────────────────────────────────────────────────────────
 function handleInterveneInput(e) {
   const val = e.target.value;
@@ -723,6 +734,11 @@ function updateSelectedProjectHeader() {
   const stopBtn = document.getElementById('stopBtn');
   if (stopBtn) {
     stopBtn.style.display = isProjectGenerating(p.status) ? 'inline-flex' : 'none';
+  }
+  
+  const retryBtn = document.getElementById('retryBtn');
+  if (retryBtn) {
+    retryBtn.style.display = ['stopped', 'error'].includes(p.status) ? 'inline-flex' : 'none';
   }
 }
 

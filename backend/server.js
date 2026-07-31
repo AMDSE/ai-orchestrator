@@ -137,6 +137,16 @@ app.post('/api/projects/:id/stop', (req, res) => {
   }
 });
 
+// 用户恢复/重试生成
+app.post('/api/projects/:id/retry', async (req, res) => {
+  try {
+    await orchestrator.resumeProject(req.params.id);
+    res.json({ success: true, message: '已恢复项目执行' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── 技能管理 API ────────────────────────────────────────────────────────────
 
 // 获取所有技能

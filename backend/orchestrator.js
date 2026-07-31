@@ -248,12 +248,54 @@ export class Orchestrator extends EventEmitter {
     const project = this.projects.get(projectId);
     if (!project) throw new Error('项目不存在');
 
-    const ctrl = this.abortControllers.get(projectId);
-    if (ctrl) ctrl.abort();
-
+    if (this.abortControllers.has(projectId)) {
+      this.abortControllers.get(projectId).abort();
+      this.abortControllers.delete(projectId);
+    }
     project.status = ProjectStatus.STOPPED;
-    this._addMessage(projectId, 'system', `⏹️ **用户发出中止信号，正在停止模型生成...**`);
     this._emit(projectId, 'status_change', { status: ProjectStatus.STOPPED });
+  }
+
+  /**
+   * 用户重试/继续已中止的项目
+   */
+  async resumeProject(projectId) {
+    const project = this.projects.get(projectId);
+    if (!project) throw new Error('项目不存在');
+    if (![ProjectStatus.STOPPED, ProjectStatus.ERROR].includes(project.status)) {
+      throw new Error('只有已中止或异常的项目才可以重试');
+    }
+
+    if (project.plan && project.tasks && project.tasks.length > 0) {
+      project.status = ProjectStatus.EXECUTING;
+      this._emit(projectId, 'status_change', { status: ProjectStatus.EXECUTING });
+      this._addMessage(projectId, 'system', '🔄 收到重试/恢复指令，正在继续执行未完成的任务...');
+
+      const abortCtrl = new AbortController();
+      this.abortControllers.set(projectId, abortCtrl);
+      this.activeCount++;
+
+      try {
+        await this._executeTasksAndIterate(projectId, project.currentTaskIndex || 0);
+      } catch (error) {
+        if (error.name === 'AbortError' || project.status === ProjectStatus.STOPPED) {
+          project.status = ProjectStatus.STOPPED;
+          this._addMessage(projectId, 'system', `⏹️ **项目已被用户中止。** 可重新发起介入或查看已有结果。`);
+          this._emit(projectId, 'status_change', { status: ProjectStatus.STOPPED });
+        } else {
+          project.status = ProjectStatus.ERROR;
+          project.error = error.message;
+          this._addMessage(projectId, 'system', `❌ 错误：${error.message}`);
+          this._emit(projectId, 'status_change', { status: ProjectStatus.ERROR, error: error.message });
+        }
+      } finally {
+        this.abortControllers.delete(projectId);
+        this.activeCount--;
+        this._processQueue();
+      }
+    } else {
+      await this._startProject(projectId);
+    }
   }
 
   async _executeTasksAndIterate(projectId, startIndex = 0) {
