@@ -76,12 +76,10 @@ function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = nul
     };
 
     const sendChatPrompt = () => {
-      const shortCli = toShortPath(cli);
-      const shortPromptPath = toShortPath(promptFilePath);
-      // 强制设置控制台编码为 UTF-8 (65001)，使用短路径规避 CMD 剥离引号死锁
-      const cmdChat = `chcp 65001 >nul & "${shortCli}" chat -r -m agent "${shortPromptPath}"`;
+      // 使用 PowerShell 方式无损唤醒 Antigravity CLI agent 指令，规避 cmd.exe 路径空格剥离死锁
+      const psChatCmd = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; & "${cli}" chat -r -m agent "${promptFilePath}"`;
 
-      const chatProc = spawn('cmd.exe', ['/c', cmdChat], {
+      const chatProc = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-Command', psChatCmd], {
         stdio: ['pipe', 'pipe', 'pipe']
       });
 
@@ -157,12 +155,10 @@ function executeViaAntigravityCli(prompt, workspaceDir, projectId, onToken = nul
 
     if (isFirstLaunch) {
       launchedProjectWindows.add(projectId);
-      const shortCli = toShortPath(cli);
-      const shortWorkspaceDir = toShortPath(workspaceDir);
-      console.log(`🚀 首次为项目 [${projectId}] 唤醒独占 IDE 窗口 (工作区: ${shortWorkspaceDir}): ${shortCli}`);
+      console.log(`🚀 首次为项目 [${projectId}] 唤醒独占 IDE 窗口 (工作区: ${workspaceDir}): ${cli}`);
 
-      // 双引号包裹 Start-Process 参数 (使用短路径防空格)
-      const psOpenCmd = `Start-Process -FilePath "${shortCli}" -ArgumentList "--disable-workspace-trust", "-n", "${shortWorkspaceDir}"`;
+      // PowerShell 方式无损唤醒 IDE 独立窗口
+      const psOpenCmd = `Start-Process -FilePath "${cli}" -ArgumentList "--disable-workspace-trust", "-n", "${workspaceDir}"`;
       const openProc = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-Command', psOpenCmd], {
         stdio: ['ignore', 'pipe', 'pipe']
       });
