@@ -193,11 +193,21 @@ export class PlannerAgent {
       safeOutput = safeOutput.replace(/<svg[\s\S]*?<\/svg>/gi, '[SVG矢量图形已折叠以加速审查]');
       safeOutput = safeOutput.replace(/<img[\s\S]*?>/gi, '[IMG图片标签已折叠]');
       
-      // 2. 软截断：依然过长的话掐头去尾
-      if (safeOutput.length > 15000) {
-        safeOutput = safeOutput.substring(0, 7000) + '\n\n...[代码过长已智能折叠中间部分]...\n\n' + safeOutput.substring(safeOutput.length - 7000);
+      // 2. 结构化处理：判断代码闭合完整性，避免暴力切断中段导致 JS 语法破坏从而引起策略脑误判"假完成"
+      const isHtml = /<!DOCTYPE html>|<html/i.test(safeOutput);
+      const isClosed = /<\/html>/i.test(safeOutput);
+      let statusTag = '';
+      if (isHtml && !isClosed) {
+        statusTag = '\n⚠️ 【系统检测警示】：该 HTML 代码末尾未发现 </html> 闭合标签，已被模型输出长度截断！\n';
       }
-      return `### 任务 ${t.id}: ${t.title}\n描述: ${t.description}\n预期输出: ${t.expected_output || ''}\n执行产物:\n${safeOutput}`;
+
+      if (safeOutput.length > 25000) {
+        safeOutput = safeOutput.substring(0, 14000) + 
+          `\n\n...[全量实体代码过长(共 ${safeOutput.length} 字节)，已折叠中间部分剧情节点数据，保持首尾结构完整]...\n\n` + 
+          safeOutput.substring(safeOutput.length - 8000);
+      }
+
+      return `### 任务 ${t.id}: ${t.title}\n描述: ${t.description}\n预期输出: ${t.expected_output || ''}\n${statusTag}执行产物:\n${safeOutput}`;
     }).join('\n\n');
     const prompt = `【系统信号：执行脑已完成第 ${currentIteration} 轮代码方案构建】
 当前为第 ${currentIteration} 轮迭代 (设定上限为 ${maxIterations} 轮)。

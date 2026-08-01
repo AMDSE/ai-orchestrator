@@ -341,6 +341,26 @@ function _saveToWorkspace(workspaceDir, codeText) {
     // 清洗多余的反引号或前导/后置垃圾文本
     content = content.replace(/^```[a-zA-Z]*\n?/i, '').replace(/\n?```$/i, '').trim();
 
+    // 智能防御修复：若 HTML 文件遭遇模型输出长度截断导致 <script> 未闭合，自动补全收尾，防止浏览器抛 SyntaxError 挂起加载屏
+    if (fileName === 'index.html' && /<!DOCTYPE html>|<html/i.test(content)) {
+      // 替换裸调 alert 为 safeToast，避免 iframe 弹出框被阻断抛 DOMException 崩溃
+      content = content.replace(/alert\(([^)]+)\)/g, 'console.log("[Toast Notification]", $1)');
+
+      const openScriptCount = (content.match(/<script[^>]*>/gi) || []).length;
+      const closeScriptCount = (content.match(/<\/script>/gi) || []).length;
+      const isClosedHtml = /<\/html>/i.test(content);
+
+      if (openScriptCount > closeScriptCount || !isClosedHtml) {
+        console.warn(`[Workspace Saver Warning] 检测到产物 HTML 遭遇输出截断，自动执行 DOM 闭合与加载强保底注入...`);
+        let repairBlock = '\n';
+        if (openScriptCount > closeScriptCount) {
+          repairBlock += ';\n  } catch(e) { console.warn("[Safe Recovery]", e); }\n})();\n</script>\n';
+        }
+        repairBlock += '<script>\n// 强制消除加载遮罩保底\n(function(){\n  var loaders = document.querySelectorAll("#loading, #loading-screen, #loadingOverlay, .loading-screen, .loading-overlay, .loading");\n  loaders.forEach(function(el){ el.style.display="none"; el.classList.add("hidden"); });\n})();\n</script>\n</body>\n</html>';
+        content += repairBlock;
+      }
+    }
+
     const filePath = path.join(workspaceDir, fileName);
     fs.writeFileSync(filePath, content, 'utf-8');
     console.log(`📁 真实构建产物已无损落盘至工作区: ${filePath} (${content.length} 字节)`);
@@ -368,15 +388,21 @@ ${skillPrompt ? `${skillPrompt}\n` : ''}
 ❌ 禁止：输出手绘像素小人或极其粗糙的纯 SVG 拼接形状替代角色立绘！必须使用 DiceBear/Unsplash/Pixabay 高精网络素材！
 ❌ 禁止：输出纯文字描述或注释性内容，必须直接输出完整立即可运行的单文件 HTML5 代码。
 ❌ 禁止：在页面中保留任何调试文本、测试按钮、占位符内容。
+❌ 【致命Bug禁止】在代码中使用 alert()、confirm()、prompt()！它们在 iframe 沙盒与移动端中会被强行封锁并抛出 Uncaught DOMException 导致整个网页崩溃死锁！提示信息必须使用自定义内联 Toast/Modal DOM 节点或 console.log。
 ❌ 【致命Bug禁止】引入来自 cdnjs.cloudflare.com 或 unpkg.com 的任何外部 CDN 脚本！这些域名在国内访问极慢或超时，会导致页面永久卡在加载界面。如需 Howler.js，必须改用 Web Audio API 原生实现。
 ❌ 【致命Bug禁止】引入 fonts.googleapis.com 字体 CDN！此域名在国内被墙。如需自定义字体，使用 system-ui, 'Noto Sans SC', sans-serif 等系统字体回退。
 ❌ 【致命Bug禁止】将 B站 Toy SDK 或任何脚本设置为 defer 属性后再用 DOMContentLoaded 触发初始化！defer 脚本会阻塞 DOMContentLoaded 触发，导致 init 函数永远不执行、页面永久卡在加载界面！
 ❌ 【致命Bug禁止】裸调 localStorage.getItem / setItem！必须全部包裹在 try-catch 中，否则在 blob:iframe 预览或隐私模式下会抛 SecurityError 导致整个脚本崩溃、加载界面永远不消失。
 
+【强制代码量控制与完整性保证】
+✅ 对话节点控制：若制作 Galgame/视觉小说，请精心设计 15~20 个高质量、多分支剧情节点。切勿一次性写入上百个巨型节点，避免超出 API 单次输出长度上限而导致代码尾部被截断切开！必须确保包含完整的 </script>、</body>、</html> 标签收尾！
+
 【强制初始化安全模式 - 所有 HTML5 项目必须严格遵守】
 ✅ 将 B站 Toy SDK 改为 async（不阻塞 DOMContentLoaded）：<script async src="https://s1.hdslb.com/bfs/seed/toy/app/sdk/toy-sdk.js"></script>
 ✅ 初始化函数必须使用兼容写法，不能单纯依赖 DOMContentLoaded（因 defer 脚本会阻塞它）：
    if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', () => initGame()); } else { initGame(); }
+✅ 隐藏加载屏保底：在 initGame() 开头立即设置安全定时器（即使后续逻辑失败，1秒后强制隐藏加载遮罩）：
+   setTimeout(() => { const el = document.getElementById('loading') || document.getElementById('loadingScreen') || document.getElementById('loadingOverlay'); if(el) el.style.display='none'; }, 1000);
 ✅ 所有 localStorage 必须包裹在 try-catch 中：
    function safeGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
    function safeSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
