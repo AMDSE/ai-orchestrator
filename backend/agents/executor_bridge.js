@@ -395,24 +395,25 @@ ${skillPrompt ? `${skillPrompt}\n` : ''}
 ❌ 【致命Bug禁止】裸调 localStorage.getItem / setItem！必须全部包裹在 try-catch 中，否则在 blob:iframe 预览或隐私模式下会抛 SecurityError 导致整个脚本崩溃、加载界面永远不消失。
 
 【强制代码量控制与完整性保证】
-✅ 对话节点控制：若制作 Galgame/视觉小说，请精心设计 15~20 个高质量、多分支剧情节点。切勿一次性写入上百个巨型节点，避免超出 API 单次输出长度上限而导致代码尾部被截断切开！必须确保包含完整的 </script>、</body>、</html> 标签收尾！
+✅ 对话节点控制：若制作 Galgame/视觉小说，请精心设计 15~25 个极具趣味性、B站热梗梗味十足、包含多分支选择与多结局的精美对话节点。切勿写入上百个巨型节点，避免超出 API 长度上限导致代码尾部被截断！必须确保包含完整的 </script>、</body>、</html> 标签收尾！
+
+【强制画面切换与进入游戏交互逻辑 (绝对禁止黑屏)】
+✅ 界面切换逻辑：点击“开始游戏”/“开始冒险”按钮时，必须精确控制 DOM 显隐。若存在最外层 #app 容器，必须同步对其添加 active 类或修改 display: flex/block！绝对禁止出现隐藏了标题页后，父级 #app 仍为 display: none 导致屏幕变黑无法进入游戏的问题！
+✅ 所有 img 标签必须配置 onerror 保底（防止网络图床在部分环境加载失败导致显示撕裂破图）。
 
 【强制初始化安全模式 - 所有 HTML5 项目必须严格遵守】
 ✅ 将 B站 Toy SDK 改为 async（不阻塞 DOMContentLoaded）：<script async src="https://s1.hdslb.com/bfs/seed/toy/app/sdk/toy-sdk.js"></script>
-✅ 初始化函数必须使用兼容写法，不能单纯依赖 DOMContentLoaded（因 defer 脚本会阻塞它）：
+✅ 初始化函数必须使用兼容写法，不能单纯依赖 DOMContentLoaded：
    if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', () => initGame()); } else { initGame(); }
 ✅ 隐藏加载屏保底：在 initGame() 开头立即设置安全定时器（即使后续逻辑失败，1秒后强制隐藏加载遮罩）：
-   setTimeout(() => { const el = document.getElementById('loading') || document.getElementById('loadingScreen') || document.getElementById('loadingOverlay'); if(el) el.style.display='none'; }, 1000);
+   setTimeout(() => { const el = document.getElementById('loading') || document.getElementById('loadingScreen') || document.getElementById('loadingOverlay') || document.getElementById('loading-screen'); if(el) { el.style.display='none'; el.classList.add('hidden'); } }, 1000);
 ✅ 所有 localStorage 必须包裹在 try-catch 中：
    function safeGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
    function safeSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 
 【强制视觉美学与游戏级质量标准】
-✅ 素材高精化：必须积极调用 Unsplash、DiceBear 矢量人像库、B站公开图床素材。
-✅ 音效与视听包装：游戏类应用必须使用 Web Audio API（AudioContext）实现音效，背景可采用 Canvas 动态粒子特效。严禁通过 cdnjs 引入 Howler.js！
-✅ 现代 UI 质感：使用现代化深色/炫彩渐变背景、毛玻璃视差（Glassmorphism）、微交互动画。字体使用 system-ui 或国内可访问的字体。
-✅ 若制作 Galgame/视觉小说：必须包含≥50条对话节点、≥3个分支路线、≥2个不同结局，角色立绘必须使用 DiceBear HD 矢量人像，绝不使用粗糙像素画。
-✅ 所有 Web 页面必须 mobile-first 双端适配（viewport meta + @media 媒体查询）。
+✅ 丰富音效与 UI 质感：使用 Web Audio API（AudioContext）实现高质感音效，背景采用 Canvas 动态粒子/星空特效，按钮使用 CSS3 炫彩渐变、毛玻璃与 Hover 微交互动画。
+✅ 布局自适应：所有 Web 页面必须 mobile-first 双端适配（viewport meta + @media 媒体查询）。
 若遇到歧义，可用 [QUESTION_TO_PLANNER]提问[/QUESTION_TO_PLANNER]`;
 
   return basePrompt;
@@ -435,14 +436,12 @@ export function buildExecutorPrompt(plan, task, plannerAnswer = null, selectedSk
     ? `\n【当前技能禁止项】\n${forbiddenPatterns.map(r => `❌ ${r}`).join('\n')}`
     : '';
 
-  const assetBlock = `\n【推荐高精素材与在线图床 URL 列表 (请直接写入 <img> 或 CSS background-image)】
-- 🌆 赛博/游戏炫彩背景: https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80
-- 🌃 电竞/暗黑风格背景: https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1200&q=80
-- 🐶 萌宠/大狗高精立绘: https://api.dicebear.com/7.x/bottts/svg?seed=hero_dog
-- ⚔️ 勇者/主角高精立绘: https://api.dicebear.com/7.x/adventurer/svg?seed=hero_master
-- 🎮 UP主/玩家高精立绘: https://api.dicebear.com/7.x/avataaars/svg?seed=bilibili_up
-- 😆 搞笑热梗表情立绘: https://api.dicebear.com/7.x/big-smile/svg?seed=funny_meme
-- 💎 道具/水晶晶体元素: https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80`;
+  const assetBlock = `\n【推荐高质感素材、图标与备用保底配置 (请在 <img> 中添加 onerror 防破图)】
+- 🐶 大狗叫/萌宠立绘: data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><circle cx="60" cy="60" r="55" fill="%23ff9f43"/><circle cx="45" cy="50" r="8" fill="%23222"/><circle cx="75" cy="50" r="8" fill="%23222"/><ellipse cx="60" cy="65" rx="12" ry="8" fill="%23222"/><polygon points="25,25 45,40 20,55" fill="%23ee5253"/><polygon points="95,25 75,40 100,55" fill="%23ee5253"/><text x="60" y="95" text-anchor="middle" fill="%23ffffff" font-weight="bold" font-size="12">大狗叫</text></svg>
+- 🐱 圆头耄耋/老者立绘: data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><circle cx="60" cy="60" r="55" fill="%2354a0ff"/><circle cx="45" cy="50" r="6" fill="%23222"/><circle cx="75" cy="50" r="6" fill="%23222"/><path d="M40,75 Q60,90 80,75" stroke="%23222" stroke-width="4" fill="none"/><path d="M30,35 Q60,20 90,35" stroke="%23ffffff" stroke-width="6" fill="none"/><text x="60" y="105" text-anchor="middle" fill="%23ffffff" font-weight="bold" font-size="11">圆头耄耋</text></svg>
+- 🌆 赛博/暗黑炫彩背景: linear-gradient(135deg, %230a0a1a 0%, %231a0a2e 50%, %230a1a2e 100%)
+- 🐶 备用外网立绘(配合onerror): https://api.dicebear.com/7.x/bottts/svg?seed=hero_dog
+- ⚔️ 备用主角立绘(配合onerror): https://api.dicebear.com/7.x/adventurer/svg?seed=hero_master`;
 
   if (plannerAnswer) {
     return `项目：${plan?.title || '项目'}\n任务 ${task.id}：${task.title}\n描述：${task.description}\n预期输出：${task.expected_output || '完整实体代码/文件'}\n\n【策略脑指导更新】策略脑对你之前提问的解决方案：\n${plannerAnswer}\n\n请结合策略脑的专业指导，继续完成上述任务。${rulesBlock}${forbidBlock}${assetBlock}`;
