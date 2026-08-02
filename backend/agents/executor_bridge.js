@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { skillRegistry } from '../skill-registry.js';
 import { createExecutorClient, streamChat } from '../lib/llm.js';
 import { searchWeb, searchImageAssets } from '../services/search_service.js';
+import { getWorkspaceBase } from '../lib/paths.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -151,7 +152,7 @@ export async function executeTask(taskData, defaultOpenaiClient = null, onToken 
   const projectId = taskData.projectId || 'default';
 
   // 创建该项目的专属工作区目录
-  const workspaceDir = path.join(__dirname, '..', '..', 'workspace', projectId);
+  const workspaceDir = path.join(getWorkspaceBase(), projectId);
   try { fs.mkdirSync(workspaceDir, { recursive: true }); } catch (e) {}
 
   console.log(`[Executor Engine] 模式: 外接 API | Workspace: ${workspaceDir}`);

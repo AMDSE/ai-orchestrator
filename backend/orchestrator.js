@@ -12,7 +12,8 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const userdataDir = path.join(__dirname, '..', 'userdata');
+import { getUserdataDir, getWorkspaceBase } from './lib/paths.js';
+const userdataDir = getUserdataDir();
 const projectsFilePath = path.join(userdataDir, 'projects.json');
 
 export const ProjectStatus = {
@@ -60,7 +61,7 @@ export class Orchestrator extends EventEmitter {
       }
 
       // 从 workspace 物理目录智能反补恢复缺失的项目记录
-      const workspaceBase = path.join(__dirname, '..', 'workspace');
+      const workspaceBase = getWorkspaceBase();
       if (fs.existsSync(workspaceBase)) {
         const dirs = fs.readdirSync(workspaceBase);
         for (const dirName of dirs) {
