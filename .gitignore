@@ -4,3 +4,5 @@ userdata/
 workspace/
 .DS_Store
 *.log
+release/
+dist/

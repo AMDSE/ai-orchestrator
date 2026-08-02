@@ -8,7 +8,7 @@ let ws = null;
 let projects = new Map();
 let loadedSkills = []; // 动态存储从后端加载的所有 Skill
 let selectedProjectId = null;
-let currentMode = 'standard';
+let currentMode = 'standard'; // 已移除创意模式，固定标准模式
 let currentReviewProject = null;
 let currentTab = 'result';
 let thoughtsMap = new Map(); // projectId -> text
@@ -1180,14 +1180,6 @@ async function deleteProject(projectId, event) {
   }
 }
 
-// ── 模式切换 ────────────────────────────────────────────────────────────────
-document.querySelectorAll('.mode-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentMode = btn.dataset.mode;
-  });
-});
 
 // ── 审查台 ──────────────────────────────────────────────────────────────────
 function openReview(projectId, event) {
@@ -1372,3 +1364,15 @@ function showToast(message, type = 'info') {
 
 // ── 启动 ─────────────────────────────────────────────────────────────────────
 connectWS();
+
+// ── Electron 桌面版窗口控制 ──────────────────────────────────
+if (window.electronAPI && window.electronAPI.isElectron) {
+  const winControls = document.getElementById('winControls');
+  if (winControls) winControls.style.display = 'flex';
+  const minBtn = document.getElementById('winMin');
+  const maxBtn = document.getElementById('winMax');
+  const closeBtn = document.getElementById('winClose');
+  if (minBtn) minBtn.onclick = () => window.electronAPI.minimize();
+  if (maxBtn) maxBtn.onclick = () => window.electronAPI.toggleMaximize();
+  if (closeBtn) closeBtn.onclick = () => window.electronAPI.close();
+}

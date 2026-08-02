@@ -238,19 +238,30 @@ app.get('/api/health', (req, res) => {
 });
 
 // ── 启动服务器 ────────────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
-
-// 先初始化 SkillRegistry，再启动监听
-skillRegistry.init().then(() => {
-  server.listen(PORT, () => {
-    console.log(`
+export async function startServer(port = process.env.PORT || 3000) {
+  await skillRegistry.init();
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, () => {
+      console.log(`
 ╔════════════════════════════════════════════╗
-║     🤖 AI 多智能体编排系统 已启动           ║
+║     🤖 AI 双脑编排系统 已启动               ║
 ║     策略脑: 高性能模型 (外接 API)           ║
 ║     执行脑: 较低性能模型 (外接 API)         ║
 ║     技能库: ${skillRegistry.skills.size} 个技能已加载             ║
-║     地址: http://localhost:${PORT}           ║
+║     地址: http://localhost:${port}           ║
 ╚════════════════════════════════════════════╝
-    `);
+      `);
+      resolve({ server, app, port, orchestrator });
+    });
   });
-}).catch(console.error);
+}
+
+// 直接以 node backend/server.js 运行时自动启动（Electron 桌面版通过 startServer 启动）
+const isDirectRun = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isDirectRun) {
+  startServer().catch((err) => {
+    console.error('服务器启动失败:', err);
+    process.exit(1);
+  });
+}
