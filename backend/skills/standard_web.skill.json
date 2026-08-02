@@ -1,23 +1,36 @@
 {
   "id": "standard_web",
-  "name": "🌐 通用 Web 全栈技能",
+  "name": "🌐 通用 Web 全栈技能 (v2.0 现代化增强版)",
   "icon": "🌐",
-  "description": "包含：Mobile-first 响应式布局、Flexbox/Grid 界面与标准 HTML5 代码规范。",
-  "version": "1.0.0",
+  "description": "包含：Mobile-first 双端自适应、现代 CSS 布局、语义化 HTML5、性能、无障碍与安全优化。",
+  "version": "2.0.0",
   "targetPlatform": "通用 Web 浏览器",
   "builtIn": true,
   "sourceDocs": [],
-  "systemPrompt": "【🌐 通用 Web 全栈技能（已启用）】\n1. 使用 Mobile-first 设计策略，确保移动端与桌面端双端自适应。\n2. 布局优先使用 CSS Flexbox 与 Grid，配合 @media (max-width: 768px) 媒体查询。\n3. 使用语义化 HTML5 标签（header, main, section, article 等）。\n4. 所有字体引入 Google Fonts 或系统字体栈，避免使用浏览器默认字体。",
+  "systemPrompt": "【🌐 通用 Web 全栈技能（已启用）】\n1. 使用 Mobile-first 设计策略，确保移动端与桌面端双端自适应（viewport meta 含 viewport-fit=cover + @media 媒体查询 + 100dvh/100vh 视口单位）。\n2. 布局优先使用 CSS Flexbox 与 Grid 现代布局，禁止 float 与 table 布局。\n3. 使用语义化 HTML5 标签（header, main, section, article, nav, footer 等），交互元素提供 aria-label 与键盘可达性。\n4. 使用 CSS 变量 (custom properties) 管理主题色、字体与间距，禁止散落硬编码颜色值。\n5. 脚本在 DOMContentLoaded 后初始化避免阻塞渲染；图片非首屏使用 loading=\"lazy\" 懒加载。\n6. 禁止为简单 UI 逻辑引入 jQuery 或大型框架，保持轻量原生实现。\n7. 外部资源（字体/图床/CDN）必须国内可用（如 cdn.bootcdn.net）或使用系统字体栈，禁止被墙 CDN。\n8. 所有 img 提供 alt 文本，交互按钮使用 <button> 标签而非 <div>。\n9. 所有异步请求与 Promise 必须做错误兜底（.catch / try-catch），禁止未捕获异常导致页面卡死。\n10. 颜色对比度符合 WCAG AA 标准，保证可读性。",
   "qualityRules": [
-    "Mobile-first 响应式布局，viewport meta 标签必须存在",
-    "Flexbox/Grid 现代布局，禁止 float 布局",
-    "语义化 HTML5 标签",
-    "颜色对比度符合 WCAG AA 标准"
+    "Mobile-first 响应式布局，viewport meta 标签必须存在且含 viewport-fit=cover",
+    "使用 CSS Flexbox/Grid 现代布局，禁止 float 与 table 布局",
+    "使用语义化 HTML5 标签，交互元素有 aria-label 且键盘可达",
+    "使用 CSS 变量管理主题与间距，禁止大量硬编码颜色",
+    "脚本在 DOMContentLoaded 后初始化，图片非首屏使用 loading=lazy",
+    "所有 img 有 alt 文本，交互按钮用 <button> 标签",
+    "颜色对比度符合 WCAG AA 标准",
+    "所有异步 Promise 有错误兜底，无未捕获异常",
+    "禁止引入 jQuery 或大型框架处理简单 UI 逻辑",
+    "外部 CDN 必须国内可用（禁止 googleapis/unpkg/cdnjs 等被墙资源）",
+    "本地 localStorage 访问必须包裹 try...catch"
   ],
   "forbiddenPatterns": [
     "float: left/right (布局用途)",
     "table 布局",
     "内联 style 大量使用",
-    "document.write"
+    "document.write",
+    "jQuery 无谓依赖",
+    "裸调 localStorage 无 try/catch",
+    "未捕获的 Promise 拒绝 (无 .catch)",
+    "无 alt 属性的 <img>",
+    "被墙外部 CDN (fonts.googleapis.com, unpkg.com, cdnjs.cloudflare.com)",
+    "alert(/confirm(/prompt( 调试残留"
   ]
 }

@@ -2,12 +2,21 @@
   "id": "none",
   "name": "⚪ 无特定技能框架",
   "icon": "⚪",
-  "description": "自由编码模式，不加载特定平台技能规范。",
-  "version": "1.0.0",
+  "description": "自由编码模式，不加载特定平台技能规范（仅保留最低执行质量底线）。",
+  "version": "2.0.0",
   "targetPlatform": "通用",
   "builtIn": true,
   "sourceDocs": [],
   "systemPrompt": "",
-  "qualityRules": [],
-  "forbiddenPatterns": []
+  "qualityRules": [
+    "产物必须为完整可运行的实体代码文件，禁止输出纯文本概述或\"已开始生成\"等空话",
+    "代码必须结构完整闭合（HTML 含 </html>、JS 无语法错误）",
+    "禁止残留测试文本、调试占位符或无关冗余 UI 元素",
+    "产物开箱即用，无需额外安装即可运行"
+  ],
+  "forbiddenPatterns": [
+    "纯文本概述替代实体代码",
+    "测试性/调试性占位符残留",
+    "未闭合的 HTML/JS 代码"
+  ]
 }
