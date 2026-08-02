@@ -7,6 +7,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { skillRegistry } from '../skill-registry.js';
 import { createExecutorClient, streamChat } from '../lib/llm.js';
+import { searchWeb, searchImageAssets } from '../services/search_service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -22,6 +23,8 @@ const BASE_EXECUTOR_SYSTEM_PROMPT = `【隐形系统指令：你仅作为项目�
 4. 【向策略脑求助】若遇到技术瓶颈、需求歧义或未知 API，必须使用 [QUESTION_TO_PLANNER]你的问题[/QUESTION_TO_PLANNER] 标签向策略脑提问，不得擅自猜测瞎写。
 5. 【干净无冗余】严禁残留测试性文本、调试占位符、临时弹窗或无关 UI 元素；产物应开箱即用。
 6. 【现代视觉标准】若构建 Web 应用，必须 mobile-first 双端自适应（viewport meta + CSS @media 媒体查询），使用高质量网络图床素材与现代 CSS 视觉效果，禁止粗糙像素拼接。
+7. 【基于框架继续构建】若提示词中包含策略脑已完成的【整体框架 (framework)】，你必须在框架基础上补齐剩余实现，严禁推倒重写或忽略框架；框架中的高难度模块已由策略脑完成，你只需完成剩余部分并保证整体可运行。
+8. 【善用联网检索结果】若提示词中包含【🌐 真实联网检索资讯】，必须基于这些真实资料进行开发决策，不得忽略或虚构。
 
 你只负责执行，不负责战略决策与质量终审（那是策略脑的工作）。`;
 
@@ -57,10 +60,14 @@ export function buildExecutorSystemPrompt(selectedSkill = 'bili_toy') {
 /**
  * 构建执行脑用户任务提示词（含策略脑指导、技能规则强化与素材建议）
  */
-export function buildExecutorPrompt(plan, task, plannerAnswer = null, selectedSkill = 'bili_toy') {
+export function buildExecutorPrompt(plan, task, plannerAnswer = null, selectedSkill = 'bili_toy', framework = '') {
   const skill = skillRegistry.getSkill(selectedSkill);
   const qualityRules = skill?.qualityRules || [];
   const forbiddenPatterns = skill?.forbiddenPatterns || [];
+
+  const frameworkBlock = (framework && framework.trim())
+    ? `\n\n【🏗️ 策略脑已完成的整体框架与高难度部分 (framework)】\n请基于以下框架继续完成剩余任务，禁止推倒重写：\n${framework}`
+    : '';
 
   const rulesBlock = qualityRules.length > 0
     ? `\n【当前技能质量规则 - ${skill.name}】\n${qualityRules.map(r => `✅ ${r}`).join('\n')}`
@@ -76,9 +83,9 @@ export function buildExecutorPrompt(plan, task, plannerAnswer = null, selectedSk
 - 🧑 备用角色立绘(配合onerror): https://api.dicebear.com/7.x/adventurer/svg?seed=hero_main`;
 
   if (plannerAnswer) {
-    return `项目：${plan?.title || '项目'}\n任务 ${task.id}：${task.title}\n描述：${task.description}\n预期输出：${task.expected_output || '完整实体代码/文件'}\n\n【策略脑指导更新】策略脑对你之前提问的解决方案：\n${plannerAnswer}\n\n请结合策略脑的专业指导，继续完成上述任务。${rulesBlock}${forbidBlock}${assetBlock}`;
+    return `项目：${plan?.title || '项目'}\n任务 ${task.id}：${task.title}\n描述：${task.description}\n预期输出：${task.expected_output || '完整实体代码/文件'}\n\n【策略脑指导更新】策略脑对你之前提问的解决方案：\n${plannerAnswer}\n\n请结合策略脑的专业指导，继续完成上述任务。${frameworkBlock}${rulesBlock}${forbidBlock}${assetBlock}`;
   }
-  return `项目：${plan?.title || '项目'}\n任务 ${task.id}：${task.title}\n描述：${task.description}\n预期输出：${task.expected_output || '完整实体代码/文件'}${rulesBlock}${forbidBlock}${assetBlock}`;
+  return `项目：${plan?.title || '项目'}\n任务 ${task.id}：${task.title}\n描述：${task.description}\n预期输出：${task.expected_output || '完整实体代码/文件'}${frameworkBlock}${rulesBlock}${forbidBlock}${assetBlock}`;
 }
 
 
@@ -91,7 +98,21 @@ async function executeViaExternalApi(taskData, executorConfig, onToken = null, s
     throw new Error('执行脑未配置 API Key，请在 .env 或界面中填写外接 API 凭据');
   }
 
-  const prompt = buildExecutorPrompt(taskData.plan, taskData.task, taskData.plannerAnswer, taskData.selectedSkill || 'bili_toy');
+  let prompt = buildExecutorPrompt(taskData.plan, taskData.task, taskData.plannerAnswer, taskData.selectedSkill || 'bili_toy', taskData.framework || '');
+
+  // 执行脑联网检索：开启后必须真实访问搜索引擎
+  if (taskData.webSearch) {
+    try {
+      console.log('[Executor Engine] 🌐 执行脑联网检索已开启，正在拉取真实网络资讯与素材...');
+      const [webData, assetData] = await Promise.all([
+        searchWeb(prompt),
+        searchImageAssets(prompt)
+      ]);
+      prompt += `\n\n[🌐 真实联网检索资讯]:\n${webData}\n\n${assetData}`;
+    } catch (webErr) {
+      console.warn('[Executor Engine] 执行脑联网检索异常，继续基于内部知识执行:', webErr.message);
+    }
+  }
 
   console.log(`🌐 执行脑 (较低性能模型) 通过外接 API: BaseURL=${executorConfig.baseUrl || process.env.EXECUTOR_BASE_URL || '(env)'}, Model=${model}`);
 

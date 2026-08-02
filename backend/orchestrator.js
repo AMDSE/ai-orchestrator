@@ -206,6 +206,7 @@ export class Orchestrator extends EventEmitter {
 
       project.plan = planResult;
       project.tasks = planResult.tasks || [];
+      project.framework = planResult.framework || '';
       project.progress = 10;
 
       this._addMessage(projectId, 'planner',
@@ -213,7 +214,8 @@ export class Orchestrator extends EventEmitter {
         `📝 ${planResult.summary || ''}\n\n` +
         `📌 **任务列表** (共${project.tasks.length}个)：\n` +
         project.tasks.map(t => `  ${t.id}. ${t.title}`).join('\n') +
-        `\n\n【信号通知】策略脑已完成初版规划，发出【PLAN_READY】信号！系统将自动拉起【执行脑 (外接 API)】去完成落地代码构建。`
+        (project.framework ? `\n\n🏗️ **策略脑已亲自完成整体框架与高难度部分**，执行脑将基于 framework 继续构建剩余任务` : '') +
+        `\n\n【信号通知】策略脑已完成初版规划，发出【PLAN_READY】信号！系统将自动拉起【执行脑 (外接 API)】去完成剩余任务。`
       );
       this._emit(projectId, 'plan_ready', { plan: planResult, iteration: project.iteration });
 
@@ -445,6 +447,8 @@ export class Orchestrator extends EventEmitter {
       projectId,
       task,
       plan: project.plan,
+      framework: project.framework || '',
+      webSearch: project.executorConfig?.webSearch === true,
       selectedSkill: project.selectedSkill || 'bili_toy',
       plannerAnswer: plannerAnswer || task._plannerAnswer || null,
       executorConfig: project.executorConfig || resolveExecutorConfig(),
