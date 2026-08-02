@@ -1,6 +1,0 @@
-  • electron-builder  version=24.13.3 os=10.0.26200
-  • loaded configuration  file=package.json ("build" field)
-  • author is missed in the package.json  appPackageFile=C:\Users\MR T\Desktop\ai-orchestrator\package.json
-  • packaging       platform=win32 arch=x64 electron=31.7.7 appOutDir=release\win-unpacked
-  • default Electron icon is used  reason=application icon is not set
-  • building        target=portable file=release\AI-Orchestrator 3.1.0.exe archs=x64
