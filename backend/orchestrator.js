@@ -4,7 +4,7 @@
 import { EventEmitter } from 'events';
 import { PlannerAgent } from './agents/planner.js';
 import { executeTask, buildExecutorPrompt } from './agents/executor_bridge.js';
-import OpenAI from 'openai';
+import { resolveStrategyConfig, resolveExecutorConfig } from './lib/llm.js';
 import 'dotenv/config';
 
 import path from 'path';
@@ -29,10 +29,7 @@ export class Orchestrator extends EventEmitter {
   constructor() {
     super();
     this.planner = new PlannerAgent();
-    this.openaiClient = new OpenAI({
-      apiKey: process.env.LONGCAT_API_KEY,
-      baseURL: process.env.LONGCAT_BASE_URL,
-    });
+    // 双脑 LLM 客户端统一由 backend/lib/llm.js 工厂创建（策略脑高性能 / 执行脑低性能）
     this.projects = new Map();
     this.abortControllers = new Map(); // 每个项目的 AbortController，用于中止生成
     this.maxParallel = 3;
@@ -144,8 +141,8 @@ export class Orchestrator extends EventEmitter {
       thoughts: [],
       iteration: 1,
       maxIterations: Number(maxIterations) || 3,
-      plannerConfig: plannerConfig || { provider: 'built-in', model: 'LongCat-2.0' },
-      executorConfig: executorConfig || { provider: 'antigravity', model: 'gemini-3.6-flash' },
+      plannerConfig: plannerConfig || resolveStrategyConfig(),
+      executorConfig: executorConfig || resolveExecutorConfig(),
       createdAt: new Date().toISOString(),
       completedAt: null,
       result: null,
@@ -179,7 +176,7 @@ export class Orchestrator extends EventEmitter {
       project.status = ProjectStatus.PLANNING;
       this._emit(projectId, 'status_change', { status: ProjectStatus.PLANNING });
 
-      const plannerModelName = project.plannerConfig?.model || 'LongCat-2.0';
+      const plannerModelName = project.plannerConfig?.model || resolveStrategyConfig().model;
       this._addMessage(projectId, 'planner', `🔵 策略脑（模型: ${plannerModelName}）开始分析需求... (当前第 ${project.iteration}/${project.maxIterations} 轮迭代)`);
 
       const onPlannerChunk = (type, token) => {
@@ -216,7 +213,7 @@ export class Orchestrator extends EventEmitter {
         `📝 ${planResult.summary || ''}\n\n` +
         `📌 **任务列表** (共${project.tasks.length}个)：\n` +
         project.tasks.map(t => `  ${t.id}. ${t.title}`).join('\n') +
-        `\n\n【信号通知】策略脑已完成初版规划，发出【PLAN_READY】信号！系统将自动拉起【执行脑 (Antigravity Agent)】去完成落地代码构建。`
+        `\n\n【信号通知】策略脑已完成初版规划，发出【PLAN_READY】信号！系统将自动拉起【执行脑 (外接 API)】去完成落地代码构建。`
       );
       this._emit(projectId, 'plan_ready', { plan: planResult, iteration: project.iteration });
 
@@ -317,10 +314,18 @@ export class Orchestrator extends EventEmitter {
         `⚡ **开始执行任务 ${task.id}/${project.tasks.length}** (第 ${project.iteration}/${project.maxIterations} 轮迭代)：${task.title}`
       );
 
-      const execModelName = project.executorConfig?.model || 'gemini-3.6-flash';
+      const execModelName = project.executorConfig?.model || resolveExecutorConfig().model;
       this._addMessage(projectId, 'executor', `🟢 执行脑（模型: ${execModelName}）接收任务：${task.description}`);
 
-      const result = await this._callExecutor(projectId, task, null);
+      // 单任务失败自动重试一次，提升整体执行鲁棒性
+      let result;
+      try {
+        result = await this._callExecutor(projectId, task, null);
+      } catch (execErr) {
+        console.warn(`[Orchestrator] 任务 ${task.id} 首次执行失败，自动重试: ${execErr.message}`);
+        this._addMessage(projectId, 'system', `⚠️ 任务 ${task.id} 首次执行异常，自动重试一次...`);
+        result = await this._callExecutor(projectId, task, null);
+      }
 
       if (result.type === 'question') {
         await this._handleQuestion(projectId, task, result.question);
@@ -442,13 +447,13 @@ export class Orchestrator extends EventEmitter {
       plan: project.plan,
       selectedSkill: project.selectedSkill || 'bili_toy',
       plannerAnswer: plannerAnswer || task._plannerAnswer || null,
-      executorConfig: project.executorConfig || { provider: 'antigravity', model: 'gemini-3.6-flash' },
+      executorConfig: project.executorConfig || resolveExecutorConfig(),
       signal: this.abortControllers.get(projectId)?.signal
     };
 
     const res = await executeTask(
       taskData,
-      this.openaiClient,
+      null,
       (token) => this._emit(projectId, 'token', { taskId: task.id, token })
     );
 

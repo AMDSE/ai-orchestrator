@@ -229,7 +229,8 @@ app.post('/api/skill-alchemy/run', async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    model: process.env.LONGCAT_MODEL,
+    strategyModel: process.env.STRATEGY_MODEL || '未配置 (默认 gpt-4o)',
+    executorModel: process.env.EXECUTOR_MODEL || '未配置 (默认 gpt-4o-mini)',
     activeProjects: orchestrator.activeCount,
     totalProjects: orchestrator.projects.size,
     skills: skillRegistry.skills.size
@@ -245,8 +246,8 @@ skillRegistry.init().then(() => {
     console.log(`
 ╔════════════════════════════════════════════╗
 ║     🤖 AI 多智能体编排系统 已启动           ║
-║     策略脑: LongCat-2.0                    ║
-║     执行脑: Antigravity (本地)              ║
+║     策略脑: 高性能模型 (外接 API)           ║
+║     执行脑: 较低性能模型 (外接 API)         ║
 ║     技能库: ${skillRegistry.skills.size} 个技能已加载             ║
 ║     地址: http://localhost:${PORT}           ║
 ╚════════════════════════════════════════════╝

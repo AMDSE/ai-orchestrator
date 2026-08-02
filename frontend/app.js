@@ -1,5 +1,5 @@
 // frontend/app.js
-// WebSocket 客户端 + 界面交互逻辑（包含实时数据双向同步、动态 Skill 炼化与注册、内联思考过程、自动拉起 Antigravity Agent）
+// WebSocket 客户端 + 界面交互逻辑（包含实时数据双向同步、动态 Skill 炼化与注册、内联思考过程、双脑外接 API 配置）
 
 const WS_URL  = `ws://${location.host}`;
 const API_URL = `http://${location.host}`;
@@ -15,8 +15,8 @@ let thoughtsMap = new Map(); // projectId -> text
 let thoughtsExpanded = true;
 
 // 模型与外接 API 全局配置状态
-let plannerProvider = 'built-in';
-let executorProvider = 'antigravity';
+let plannerProvider = 'custom_api';
+let executorProvider = 'custom_api';
 let globalConfigExpanded = false;
 let attachedFiles = [];
 
@@ -486,11 +486,11 @@ function renderProjectsGrid() {
       <div class="grid-placeholder" id="gridPlaceholder">
         <div class="placeholder-icon">🤖</div>
         <h3>选择或新建项目</h3>
-        <p>在左侧设定策略脑与执行脑模型（支持内置模型与外接 API），启动后可实时查看推理思考流并介入指导。</p>
+        <p>在左侧配置策略脑（高性能模型）与执行脑（较低性能模型）的外接 API，启动后可实时查看推理思考流并介入指导。</p>
         <div class="flow-diagram">
-          <div class="flow-item blue">🔵 策略脑<br/><small>内置 / 外接 API</small></div>
+          <div class="flow-item blue">🔵 策略脑<br/><small>高性能模型 · 规划·审查</small></div>
           <div class="flow-arrow">↔</div>
-          <div class="flow-item green">🟢 执行脑<br/><small>内置 / 外接 API</small></div>
+          <div class="flow-item green">🟢 执行脑<br/><small>较低性能模型 · 执行落盘</small></div>
           <div class="flow-arrow">↔</div>
           <div class="flow-item yellow">👤 实时介入<br/><small>打断·指导·调整</small></div>
         </div>
@@ -698,7 +698,7 @@ async function adjustMaxIterations(delta) {
 async function changeExecutorModel(model) {
   if (!selectedProjectId) return;
   try {
-    const executorConfig = { provider: 'antigravity', model };
+    const executorConfig = { provider: 'custom_api', model };
     const resp = await fetch(`${API_URL}/api/projects/${selectedProjectId}/config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -821,19 +821,13 @@ function toggleGlobalConfig() {
 }
 
 function setPlannerProvider(provider) {
-  plannerProvider = provider;
-  document.getElementById('plannerBuiltinBtn').classList.toggle('active', provider === 'built-in');
-  document.getElementById('plannerCustomBtn').classList.toggle('active', provider === 'custom_api');
-  document.getElementById('plannerBuiltinBox').style.display = provider === 'built-in' ? 'block' : 'none';
-  document.getElementById('plannerCustomBox').style.display = provider === 'custom_api' ? 'flex' : 'none';
+  // 策略脑仅支持外接 API（OpenAI 兼容）
+  plannerProvider = 'custom_api';
 }
 
 function setExecutorProvider(provider) {
-  executorProvider = provider;
-  document.getElementById('executorBuiltinBtn').classList.toggle('active', provider === 'antigravity');
-  document.getElementById('executorCustomBtn').classList.toggle('active', provider === 'custom_api');
-  document.getElementById('executorBuiltinBox').style.display = provider === 'antigravity' ? 'block' : 'none';
-  document.getElementById('executorCustomBox').style.display = provider === 'custom_api' ? 'flex' : 'none';
+  // 执行脑仅支持外接 API（OpenAI 兼容）
+  executorProvider = 'custom_api';
 }
 
 // ── 消息渲染与流式 Token ────────────────────────────────────────────────────
@@ -1065,6 +1059,28 @@ function handleInterveneKey(e) {
   }
 }
 
+// ── 外接 API 配置辅助 ───────────────────────────────────────────────────
+function getPlannerConfig() {
+  return {
+    provider: 'custom_api',
+    model: document.getElementById('plannerCustomModel').value.trim() || 'deepseek-chat',
+    apiKey: document.getElementById('plannerApiKey').value.trim(),
+    baseUrl: document.getElementById('plannerBaseUrl').value.trim(),
+    webSearch: document.getElementById('plannerWebSearchToggle').checked
+  };
+}
+
+function getExecutorConfig() {
+  return {
+    provider: 'custom_api',
+    model: document.getElementById('executorCustomModel').value.trim() || 'Qwen/Qwen2.5-7B-Instruct',
+    apiKey: document.getElementById('executorApiKey').value.trim(),
+    baseUrl: document.getElementById('executorBaseUrl').value.trim(),
+    webSearch: document.getElementById('executorWebSearchToggle').checked
+  };
+}
+
+
 // ── 创建项目 ────────────────────────────────────────────────────────────────
 async function createProject() {
   const input = document.getElementById('projectInput').value.trim();
@@ -1079,20 +1095,16 @@ async function createProject() {
   btn.innerHTML = '<span class="btn-icon">⏳</span> 启动中...';
 
   const plannerConfig = {
-    provider: plannerProvider,
-    model: plannerProvider === 'built-in' 
-      ? document.getElementById('plannerBuiltinSelect').value 
-      : (document.getElementById('plannerCustomModel').value.trim() || 'deepseek-chat'),
+    provider: 'custom_api',
+    model: document.getElementById('plannerCustomModel').value.trim() || 'deepseek-chat',
     apiKey: document.getElementById('plannerApiKey').value.trim(),
     baseUrl: document.getElementById('plannerBaseUrl').value.trim(),
     webSearch: document.getElementById('plannerWebSearchToggle').checked
   };
 
   const executorConfig = {
-    provider: executorProvider,
-    model: executorProvider === 'antigravity' 
-      ? document.getElementById('executorBuiltinSelect').value 
-      : (document.getElementById('executorCustomModel').value.trim() || 'Qwen/Qwen2.5-72B-Instruct'),
+    provider: 'custom_api',
+    model: document.getElementById('executorCustomModel').value.trim() || 'Qwen/Qwen2.5-7B-Instruct',
     apiKey: document.getElementById('executorApiKey').value.trim(),
     baseUrl: document.getElementById('executorBaseUrl').value.trim(),
     webSearch: document.getElementById('executorWebSearchToggle').checked
@@ -1237,13 +1249,16 @@ function copyToClipboard() {
   navigator.clipboard.writeText(text).then(() => showToast('📋 已复制到剪贴板', 'success'));
 }
 
-function sendToAntigravity() {
+function previewInNewWindow() {
   const p = currentReviewProject;
   if (!p) return;
-  const prompt = `请帮我审查并优化以下项目结果：\n\n**项目**：${p.plan?.title || '项目'}\n\n**成果**：\n${p.result || ''}`;
-  navigator.clipboard.writeText(prompt).then(() => {
-    showToast('⚡ 提示词已复制，请粘贴到 Antigravity 对话框', 'info');
-  });
+  const raw = p.result || '';
+  const htmlMatch = raw.match(/(<!DOCTYPE html>[\s\S]*<\/html>)/i) || raw.match(/```html([\s\S]*?)```/i);
+  if (!htmlMatch) { showToast('当前项目没有可预览的 HTML 成果', 'error'); return; }
+  const code = htmlMatch[1] || htmlMatch[0];
+  const blob = new Blob([code], { type: 'text/html; charset=utf-8' });
+  const blobUrl = URL.createObjectURL(blob);
+  window.open(blobUrl, '_blank');
 }
 
 function clearMessages() {

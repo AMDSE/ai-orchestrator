@@ -1032,13 +1032,13 @@ textarea::placeholder { color: var(--text-muted); }
 }
 .btn-copy:hover { background: var(--bg-card-hover); color: var(--text-primary); }
 
-.btn-antigravity {
+.btn-preview {
   flex: 1; padding: 10px; border-radius: var(--radius-sm);
   background: linear-gradient(135deg, rgba(0,212,170,.2), rgba(79,142,247,.2));
   border: 1px solid rgba(0,212,170,.3);
   color: var(--accent-green); font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all .2s;
 }
-.btn-antigravity:hover { background: linear-gradient(135deg, rgba(0,212,170,.3), rgba(79,142,247,.3)); }
+.btn-preview:hover { background: linear-gradient(135deg, rgba(0,212,170,.3), rgba(79,142,247,.3)); }
 
 /* ── Toast ── */
 .toast-container {

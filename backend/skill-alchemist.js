@@ -2,8 +2,8 @@
 // 技能炼化器：爬取信源 → 策略脑 LLM 提炼 → 生成 Skill JSON → 注册到 SkillRegistry
 // 爬虫首选 Jina Reader API（零安装）+ 可选 Crawlee 批量抓取
 
-import OpenAI from 'openai';
 import { skillRegistry } from './skill-registry.js';
+import { createStrategyClient, streamChat, parseJsonResponse } from './lib/llm.js';
 
 // Jina Reader：零配置，将任意 URL 转换为 LLM-ready Markdown
 async function scrapeViaJinaReader(url) {
@@ -76,10 +76,7 @@ export async function scrapeSourceUrls(urls) {
  * 核心炼化函数：将爬取内容 → LLM 提炼 → Skill JSON
  */
 export async function alchemizeSkill({ urls, customPrompt, plannerConfig, onProgress }) {
-  const openaiClient = new OpenAI({
-    apiKey: process.env.LONGCAT_API_KEY,
-    baseURL: process.env.LONGCAT_BASE_URL,
-  });
+  const { client, model, config } = createStrategyClient(plannerConfig);
 
   // Stage 1: 爬取所有信源
   onProgress?.('scraping', '正在抓取信源内容...');
@@ -118,55 +115,26 @@ ${totalContent}
 
 请直接输出 JSON，不要包含任何其他内容。`;
 
-  const model = plannerConfig?.model || process.env.LONGCAT_MODEL || 'LongCat-2.0';
-  const stream = await openaiClient.chat.completions.create({
+  const rawOutput = await streamChat({
+    client,
     model,
     messages: [
       { role: 'system', content: alchemySystemPrompt },
       { role: 'user', content: userMessage }
     ],
     temperature: 0.4,
-    stream: true,
+    onChunk: (type, token) => {
+      if (type === 'content') onProgress?.('token', token);
+    },
   });
-
-  let rawOutput = '';
-  const chunks = [];
-  for await (const chunk of stream) {
-    const token = chunk.choices[0]?.delta?.content || '';
-    if (token) {
-      chunks.push(token);
-      onProgress?.('token', token);
-    }
-  }
-  rawOutput = chunks.join('');
 
   // Stage 3: 解析 JSON 输出
   onProgress?.('parsing', '正在解析技能结构...');
   let skillData;
-
   try {
-    let cleanText = rawOutput.trim();
-    // 清除 Markdown 代码块标记 ```json ... ```
-    cleanText = cleanText.replace(/^```[a-zA-Z]*\n?/i, '').replace(/\n?```$/i, '').trim();
-
-    // 匹配最外层平衡的 JSON 对象 {}
-    const firstOpen = cleanText.indexOf('{');
-    const lastClose = cleanText.lastIndexOf('}');
-    if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
-      cleanText = cleanText.substring(firstOpen, lastClose + 1);
-    }
-
-    skillData = JSON.parse(cleanText);
+    skillData = parseJsonResponse(rawOutput);
   } catch (e) {
-    // 兜底尝试：移除可能存在的尾部逗号与注释
-    try {
-      const sanitized = cleanText
-        .replace(/,\s*([}\]])/g, '$1') // 移除尾随逗号
-        .replace(/\/\*[\s\S]*?\*\/|([^:]|^)\/\/.*/g, '$1'); // 移除注释
-      skillData = JSON.parse(sanitized);
-    } catch (e2) {
-      throw new Error(`技能 JSON 解析失败: ${e.message}\n原始输出:\n${rawOutput.slice(0, 500)}`);
-    }
+    throw new Error(`技能 JSON 解析失败: ${e.message}\n原始输出:\n${rawOutput.slice(0, 500)}`);
   }
 
   // Stage 4: 补全元数据并校验

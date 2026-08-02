@@ -1,7 +1,7 @@
 {
   "name": "ai-orchestrator",
   "version": "1.0.0",
-  "description": "Multi-agent AI orchestration: LongCat Planner + Antigravity Executor",
+  "description": "Dual-brain AI orchestration: High-performance Strategy Brain + Low-cost Executor Brain (OpenAI-compatible external APIs)",
   "main": "backend/server.js",
   "type": "module",
   "scripts": {

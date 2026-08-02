@@ -1,19 +1,15 @@
 // backend/agents/planner.js
-// 策略脑：支持 LongCat-2.0 / 内置模型 / 外接自定义 API (OpenAI 兼容)
+// 策略脑 (Strategy Brain)：使用【高性能模型】作为顶层架构师
+// 全部通过 OpenAI 兼容外接 API 调用，无内置/专属模型依赖
 
-import OpenAI from 'openai';
 import 'dotenv/config';
 import { searchWeb, searchImageAssets } from '../services/search_service.js';
-
-const defaultClient = new OpenAI({
-  apiKey: process.env.LONGCAT_API_KEY,
-  baseURL: process.env.LONGCAT_BASE_URL,
-});
+import { createStrategyClient, streamChat, parseJsonResponse } from '../lib/llm.js';
 
 const PLANNER_SYSTEM_PROMPT = `【隐形系统指令：你仅作为项目的顶级策略 brain / 策略脑】
 
-你是一个顶尖的 AI 项目策略脑（Strategic Planner Brain）。你的唯一职责是：
-1. 【架构规划与无损需求继承】接收用户想法，深度分析需求。用户在原始想法中提出的所有具体硬性要求（如“双端适配 / 移动端与桌面端自适应”、“特定主题/热梗/核心玩法”、“彻底去除页面非必要/测试性冗余元素”、“指定导出文件格式”等），策略脑在拆解 tasks 任务清单时，必须 100% 完整继承并显式写进每个 task 的 description 和 expected_output 中，严禁在归纳时丢弃或擅自替换主题！
+你是一个顶尖的 AI 项目策略脑（Strategic Planner Brain），运行在高性能模型之上。你的唯一职责是：
+1. 【架构规划与无损需求继承】接收用户想法，深度分析需求。用户在原始想法中提出的所有具体硬性要求（如"双端适配 / 移动端与桌面端自适应"、"特定主题/热梗/核心玩法"、"彻底去除页面非必要/测试性冗余元素"、"指定导出文件格式"等），策略脑在拆解 tasks 任务清单时，必须 100% 完整继承并显式写进每个 task 的 description 和 expected_output 中，严禁在归纳时丢弃或擅自替换主题！
 2. 【现代 Web 美学与游戏级视觉标准】你规划的 Web 应用与小游戏产物必须具备顶级视觉质感！在拆解任务时，必须明确要求执行脑使用高品质网络图床/CDN素材（如 Unsplash、Pixabay、DiceBear高清矢量人像）、现代 CSS3 炫彩/暗黑 UI、毛玻璃视差（Glassmorphism）、微交互动画与 Web Audio/Howler.js 真实音效！严禁允许执行脑使用手绘像素小人或粗糙的 HTML 几何拼凑！
 3. 【严格分工】你绝对不是执行代码的底层机器！你绝不要尝试自己编写全部具体代码或替代执行脑工作！你的职责是给【执行脑 (Executor Brain)】下发任务指令、解答其执行瓶颈，并在执行脑完成后进行质量审查。
 4. 【质量审查与迭代】当执行脑完成某一轮代码构建后，你需要对照用户原始需求及美学标准对产物进行严苛审查：
@@ -65,6 +61,7 @@ const PLANNER_SYSTEM_PROMPT = `【隐形系统指令：你仅作为项目的顶�
 
 始终用中文回复，保持专业、严谨、策略化。`;
 
+
 export class PlannerAgent {
   constructor() {
     this.conversationHistory = new Map();
@@ -85,23 +82,15 @@ export class PlannerAgent {
     return this.conversationHistory.get(projectId);
   }
 
+  /**
+   * 获取策略脑客户端与模型：仅支持外接 API（OpenAI 兼容）
+   */
   _getClientAndModel(plannerConfig) {
-    if (plannerConfig && (plannerConfig.provider === 'custom_api' || plannerConfig.type === 'custom_api') && plannerConfig.apiKey) {
-      const customClient = new OpenAI({
-        apiKey: plannerConfig.apiKey,
-        baseURL: plannerConfig.baseUrl || 'https://api.openai.com/v1',
-      });
-      return {
-        client: customClient,
-        model: plannerConfig.model || 'gpt-4o'
-      };
+    const { client, model, config } = createStrategyClient(plannerConfig);
+    if (!config.apiKey) {
+      console.warn('[Planner] ⚠️ 策略脑未配置 API Key，请填写外接 API 凭据');
     }
-
-    // 自带/内置模式强统一为环境配置的 LongCat 模型，规避向 LongCat 端点透传非 LongCat 模型导致的 400 错误
-    return {
-      client: defaultClient,
-      model: process.env.LONGCAT_MODEL || 'LongCat-2.0'
-    };
+    return { client, model };
   }
 
   injectIntervention(projectId, userMessage) {
@@ -111,6 +100,7 @@ export class PlannerAgent {
       content: `【用户实时介入】用户提出了调整意见/补充要求：\n${userMessage}\n\n请根据用户的新要求重新规划或调整建议。`
     });
   }
+
 
   async _streamCompletion(projectId, prompt, plannerConfig = null, onChunk = null, signal = null) {
     const webSearch = plannerConfig?.webSearch !== false;
@@ -135,31 +125,19 @@ export class PlannerAgent {
     }
 
     const { client, model } = this._getClientAndModel(plannerConfig);
-    console.log(`[Planner Engine] 运行策略脑 - 模型: ${model}`);
+    console.log(`[Planner Engine] 运行策略脑 (高性能模型) - 模型: ${model}`);
 
-    const stream = await client.chat.completions.create({
-      model: model,
+    const fullContent = await streamChat({
+      client,
+      model,
       messages: history,
       temperature: 0.7,
-      stream: true,
-    }, { signal: signal || undefined, timeout: 60000 });
+      signal,
+      onChunk: (type, token) => {
+        if (onChunk) onChunk(type, token);
+      },
+    });
 
-    const chunks = [];
-    for await (const chunk of stream) {
-      const delta = chunk.choices[0]?.delta;
-      const thoughtToken = delta?.reasoning_content || delta?.thought;
-      const contentToken = delta?.content || '';
-
-      if (thoughtToken) {
-        if (onChunk) onChunk('thought', thoughtToken);
-      }
-      if (contentToken) {
-        chunks.push(contentToken);
-        if (onChunk) onChunk('content', contentToken);
-      }
-    }
-
-    const fullContent = chunks.join('');
     history.push({ role: 'assistant', content: fullContent });
     return this._parseResponse(fullContent);
   }
@@ -175,6 +153,7 @@ export class PlannerAgent {
       : `请自主生成3个有创意且实用的项目想法（可以是Web应用、工具、游戏等），然后选出最佳方案并制定执行计划。`;
     return await this._streamCompletion(projectId, prompt, plannerConfig, onChunk, signal);
   }
+
 
   async answerQuestion(projectId, question, context = '', plannerConfig = null, onChunk = null, signal = null) {
     const prompt = context
@@ -192,7 +171,7 @@ export class PlannerAgent {
       // 剥离可能导致审查极度缓慢甚至假死的内联 SVG 和超长图片标签
       safeOutput = safeOutput.replace(/<svg[\s\S]*?<\/svg>/gi, '[SVG矢量图形已折叠以加速审查]');
       safeOutput = safeOutput.replace(/<img[\s\S]*?>/gi, '[IMG图片标签已折叠]');
-      
+
       // 2. 结构化处理：判断代码闭合完整性，避免暴力切断中段导致 JS 语法破坏从而引起策略脑误判"假完成"
       const isHtml = /<!DOCTYPE html>|<html/i.test(safeOutput);
       const isClosed = /<\/html>/i.test(safeOutput);
@@ -202,13 +181,15 @@ export class PlannerAgent {
       }
 
       if (safeOutput.length > 25000) {
-        safeOutput = safeOutput.substring(0, 14000) + 
-          `\n\n...[全量实体代码过长(共 ${safeOutput.length} 字节)，已折叠中间部分剧情节点数据，保持首尾结构完整]...\n\n` + 
+        safeOutput = safeOutput.substring(0, 14000) +
+          `\n\n...[全量实体代码过长(共 ${safeOutput.length} 字节)，已折叠中间部分剧情节点数据，保持首尾结构完整]...\n\n` +
           safeOutput.substring(safeOutput.length - 8000);
       }
 
       return `### 任务 ${t.id}: ${t.title}\n描述: ${t.description}\n预期输出: ${t.expected_output || ''}\n${statusTag}执行产物:\n${safeOutput}`;
     }).join('\n\n');
+
+
     const prompt = `【系统信号：执行脑已完成第 ${currentIteration} 轮代码方案构建】
 当前为第 ${currentIteration} 轮迭代 (设定上限为 ${maxIterations} 轮)。
 请策略脑对照用户原始需求，对以下执行脑产物进行深度质量审查与瑕疵检验：
@@ -218,7 +199,7 @@ ${outputsText}
 请策略脑严肃审查研判以下三项：
 1. 【需求完整性与双端适配核验】：产物是否 100% 实现了用户要求的所有具体指标（若用户要求网页，是否包含 CSS @media (max-width: 768px) 移动端与桌面端双端自适应布局）？若缺失双端适配或功能点，必须判定 decision="optimize"！
 2. 【干净无多余元素核验】：产物中是否混入或残留了测试性文本、临时调试数据、放置在不合理位置的测试框/不相关元素？若包含无关冗余元素，必须判定 decision="optimize" 并在 new_tasks 中要求彻底清理！
-3. 【防假完成核验】：若执行产物仅仅是"在本地Agent开启新对话"等描述性文本，或者没有包含实体代码文件，必须判定为【假完成/严重质量瑕疵】！
+3. 【防假完成核验】：若执行产物仅仅是描述性文本，或者没有包含实体代码文件，必须判定为【假完成/严重质量瑕疵】！
 
 仅当产物 100% 覆盖用户需求、具备完美双端自适应且干净无任何冗余文本时，方可输出 decision="complete"。`;
 
@@ -237,13 +218,10 @@ ${outputsText}
 
   _parseResponse(content) {
     try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (parsed && parsed.type) return parsed;
-      }
+      const parsed = parseJsonResponse(content);
+      if (parsed && parsed.type) return parsed;
     } catch (e) {
-      // ignore
+      // ignore, fall through to heuristic fallback
     }
 
     // 智能兜底逻辑：若未能解析为标准的 Review JSON，且文本包含瑕疵/优化关键字，自动构造 review-optimize 结构
