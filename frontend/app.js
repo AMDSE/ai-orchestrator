@@ -484,15 +484,15 @@ function renderProjectsGrid() {
   if (projects.size === 0) {
     grid.innerHTML = `
       <div class="grid-placeholder" id="gridPlaceholder">
-        <div class="placeholder-icon">🤖</div>
-        <h3>选择或新建项目</h3>
-        <p>在左侧配置策略脑（高性能模型）与执行脑（较低性能模型）的外接 API，启动后可实时查看推理思考流并介入指导。</p>
+        <div class="placeholder-icon">◈</div>
+        <h3>开始一个新项目</h3>
+        <p>在左侧描述你的想法。策略脑将拆解整体框架、攻克高难度部分，并把剩余任务分派给执行脑落地。</p>
         <div class="flow-diagram">
-          <div class="flow-item blue">🔵 策略脑<br/><small>高性能模型 · 规划·审查</small></div>
-          <div class="flow-arrow">↔</div>
-          <div class="flow-item green">🟢 执行脑<br/><small>较低性能模型 · 执行落盘</small></div>
-          <div class="flow-arrow">↔</div>
-          <div class="flow-item yellow">👤 实时介入<br/><small>打断·指导·调整</small></div>
+          <div class="flow-item blue">策略脑<small>高性能 · 框架与攻坚</small></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-item green">执行脑<small>低性能 · 落地填充</small></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-item yellow">成果<small>审查与导出</small></div>
         </div>
       </div>`;
     return;

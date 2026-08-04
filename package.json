@@ -1,6 +1,6 @@
 {
   "name": "ai-orchestrator",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "Dual-brain AI orchestration: High-performance Strategy Brain (framework + hard parts) + Low-cost Executor Brain (remaining tasks), OpenAI-compatible external APIs, real web search, Web + Electron desktop.",
   "main": "electron/main.mjs",
   "type": "module",
