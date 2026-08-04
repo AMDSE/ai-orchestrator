@@ -6,3 +6,13 @@ workspace/
 *.log
 release/
 dist/
+
+# 本地临时 / 草稿文件
+_*.txt
+_*.mjs
+_*.md
+*.bak
+*.tmp
+.idea/
+.vscode/
+*.code-workspace
