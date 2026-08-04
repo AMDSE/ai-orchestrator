@@ -3,8 +3,12 @@
 // 全部通过 OpenAI 兼容外接 API 调用，无内置/专属模型依赖
 
 import 'dotenv/config';
+import path from 'path';
 import { searchWeb, searchImageAssets } from '../services/search_service.js';
 import { createStrategyClient, streamChat, parseJsonResponse } from '../lib/llm.js';
+import { runWithTools } from '../tools/runner.js';
+import { LOCAL_TOOL_DEFINITIONS } from '../tools/local-tools.js';
+import { getWorkspaceBase } from '../lib/paths.js';
 
 const PLANNER_SYSTEM_PROMPT = `【隐形系统指令：你仅作为项目的顶级策略 brain / 策略脑】
 
@@ -75,6 +79,27 @@ const PLANNER_SYSTEM_PROMPT = `【隐形系统指令：你仅作为项目的顶�
 export class PlannerAgent {
   constructor() {
     this.conversationHistory = new Map();
+    this.projectWorkspaces = new Map(); // projectId -> 项目工作区绝对路径（用于工具调用边界）
+    this.toolCallback = null; // 工具调用记录回调（由 orchestrator 注入）
+  }
+
+  /**
+   * 注入工具调用记录回调（orchestrator 用于前端 Dashboard 展示）
+   */
+  setToolCallback(fn) {
+    if (typeof fn === 'function') this.toolCallback = fn;
+  }
+
+  /**
+   * 绑定项目工作区（由 orchestrator 在创建项目时注入，供本地工具调用限定安全边界）
+   */
+  setProjectWorkspace(projectId, workDir) {
+    if (projectId) this.projectWorkspaces.set(projectId, workDir || '');
+  }
+
+  /** 解除项目工作区绑定 */
+  clearWorkspace(projectId) {
+    this.projectWorkspaces.delete(projectId);
   }
 
   _getHistory(projectId, webSearch = true) {
@@ -117,39 +142,38 @@ export class PlannerAgent {
     const history = this._getHistory(projectId, webSearch);
 
     if (prompt) {
-      let realSearchContext = '';
-      if (webSearch) {
-        try {
-          console.log(`[Planner Engine] 正在拉起真实联网检索与高精图片资源库 (Asset Registry)...`);
-          const [webData, assetData] = await Promise.all([
-            searchWeb(prompt),
-            searchImageAssets(prompt)
-          ]);
-          realSearchContext = `\n\n[🌐 真实联网最新检索资讯 (实测数据)]:\n${webData}\n\n${assetData}`;
-        } catch (e) {
-          console.warn('[Planner Engine] 真实检索异常，降级处理:', e.message);
-        }
-      }
-
-      history.push({ role: 'user', content: prompt + realSearchContext });
+      // 用户提示注入到历史（联网上下文由工具 web_search 按需获取，避免一次性轰炸）
+      history.push({ role: 'user', content: prompt });
     }
 
     const { client, model } = this._getClientAndModel(plannerConfig);
-    console.log(`[Planner Engine] 运行策略脑 (高性能模型) - 模型: ${model}`);
+    console.log(`[Planner Engine] 运行策略脑 (高性能模型 + 本地工具) - 模型: ${model}`);
 
-    const fullContent = await streamChat({
+    // 项目工作区（用于工具安全边界）
+    const workspaceRoot = this.projectWorkspaces.get(projectId) || path.join(getWorkspaceBase(), projectId);
+
+    const result = await runWithTools({
       client,
       model,
       messages: history,
+      tools: LOCAL_TOOL_DEFINITIONS,
+      toolContext: {
+        workspaceRoot,
+        onToolEvent: null
+      },
       temperature: 0.7,
       signal,
       onChunk: (type, token) => {
         if (onChunk) onChunk(type, token);
       },
+      onToolCall: (toolName, args) => {
+        console.log(`[Planner Tool] 🛠️ 策略脑调用本地工具: ${toolName}`, JSON.stringify(args).slice(0, 160));
+        if (this.toolCallback) this.toolCallback(projectId, toolName, args);
+      },
+      maxToolCalls: 8
     });
 
-    history.push({ role: 'assistant', content: fullContent });
-    return this._parseResponse(fullContent);
+    return this._parseResponse(result.content);
   }
 
   async generatePlan(projectId, userIdea, plannerConfig = null, onChunk = null, signal = null) {

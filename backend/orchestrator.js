@@ -30,6 +30,10 @@ export class Orchestrator extends EventEmitter {
   constructor() {
     super();
     this.planner = new PlannerAgent();
+    // 策略脑工具调用记录回调（Dashboard 展示）
+    this.planner.setToolCallback((projectId, toolName, args) => {
+      this._recordToolCall(projectId, 'planner', toolName, args);
+    });
     // 双脑 LLM 客户端统一由 backend/lib/llm.js 工厂创建（策略脑高性能 / 执行脑低性能）
     this.projects = new Map();
     this.abortControllers = new Map(); // 每个项目的 AbortController，用于中止生成
@@ -128,7 +132,7 @@ export class Orchestrator extends EventEmitter {
     return this.projects.get(projectId);
   }
 
-  async createProject(projectId, userInput, mode = 'standard', plannerConfig = null, executorConfig = null, maxIterations = 3, selectedSkill = 'bili_toy') {
+  async createProject(projectId, userInput, mode = 'standard', plannerConfig = null, executorConfig = null, maxIterations = 3, selectedSkill = 'bili_toy', workDir = '') {
     const project = {
       id: projectId,
       userInput,
@@ -148,9 +152,19 @@ export class Orchestrator extends EventEmitter {
       completedAt: null,
       result: null,
       progress: 0,
+      workDir: workDir || '',
+      fileActions: [],
+      toolCalls: [], // 🛠️ 双脑实时本地工具调用记录
     };
 
     this.projects.set(projectId, project);
+
+    // 注入项目工作区到策略脑（本地工具安全边界：优先用户 workDir，否则使用内部 workspace/id）
+    const resolvedWorkspace = workDir && workDir.trim()
+      ? path.resolve(workDir)
+      : path.join(getWorkspaceBase(), projectId);
+    this.planner.setProjectWorkspace(projectId, resolvedWorkspace);
+
     this._emit(projectId, 'project_created', { project });
 
     if (this.activeCount < this.maxParallel) {
@@ -453,19 +467,117 @@ export class Orchestrator extends EventEmitter {
       selectedSkill: project.selectedSkill || 'bili_toy',
       plannerAnswer: plannerAnswer || task._plannerAnswer || null,
       executorConfig: project.executorConfig || resolveExecutorConfig(),
+      workDir: project.workDir || '',
+      existingFiles: await this._scanWorkDir(project.workDir),
       signal: this.abortControllers.get(projectId)?.signal
     };
+
+    // 捕获执行脑工具的实时调用并在项目上记录（Dashboard 展示）
+    const originalOnFileWritten = (action) => this._onFileWritten(projectId, action);
 
     const res = await executeTask(
       taskData,
       null,
-      (token) => this._emit(projectId, 'token', { taskId: task.id, token })
+      (token) => this._emit(projectId, 'token', { taskId: task.id, token }),
+      originalOnFileWritten,
+      // 执行脑工具调用记录回调
+      (toolName, args) => this._recordToolCall(projectId, 'executor', toolName, args)
     );
 
     if (res.type === 'question') {
       return { type: 'question', question: res.question };
     }
     return { type: 'task_complete', output: res.output || res.summary || JSON.stringify(res) };
+  }
+
+  /**
+   * 扫描工作目录中的现有文件（Agent 修改上下文）
+   */
+  async _scanWorkDir(workDir) {
+    try {
+      if (!workDir || !fs.existsSync(workDir)) return [];
+      const results = [];
+      const stack = [{ dir: workDir, rel: '' }];
+      while (stack.length > 0 && results.length < 60) {
+        const { dir, rel } = stack.pop();
+        let entries = [];
+        try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { continue; }
+        for (const entry of entries) {
+          const abs = path.join(dir, entry.name);
+          const relPath = rel ? rel + '/' + entry.name : entry.name;
+          if (entry.isDirectory()) {
+            if (!['node_modules', '.git', '.venv', 'dist', 'build'].includes(entry.name)) stack.push({ dir: abs, rel: relPath });
+          } else if (entry.isFile()) {
+            try {
+              const stat = fs.statSync(abs);
+              const content = stat.size <= 80000 ? fs.readFileSync(abs, 'utf-8').slice(0, 50000) : '[文件过大，已省略内容]';
+              results.push({ path: relPath, content });
+            } catch {}
+          }
+          if (results.length >= 60) break;
+        }
+      }
+      return results;
+    } catch (e) { return []; }
+  }
+
+  /**
+   * Agent 文件写入回调：记录到项目并广播到前端
+   */
+  _onFileWritten(projectId, action) {
+    const project = this.projects.get(projectId);
+    if (!project) return;
+    if (!project.fileActions) project.fileActions = [];
+    const record = { ...action, timestamp: new Date().toISOString() };
+    project.fileActions.push(record);
+    this._addMessage(projectId, 'system', '📄 **Agent 已写入/修改文件：** ' + String.fromCharCode(96) + action.path + String.fromCharCode(96) + ' (' + action.size + ' 字节)');
+    this._emit(projectId, 'file_action', { action: record });
+    this._saveProjectsToDisk();
+  }
+
+  /**
+   * 记录双脑实时本地工具调用（供前端 Dashboard 展示）
+   */
+  _recordToolCall(projectId, brain, toolName, args, resultSummary) {
+    const project = this.projects.get(projectId);
+    if (!project) return;
+    if (!project.toolCalls) project.toolCalls = [];
+    const record = {
+      brain,
+      tool: toolName,
+      args: args || {},
+      summary: String(resultSummary || '').slice(0, 200),
+      timestamp: new Date().toISOString()
+    };
+    project.toolCalls.push(record);
+    this._emit(projectId, 'tool_call', { record });
+    this._saveProjectsToDisk();
+  }
+
+  /**
+   * 设置项目工作目录（Agent 目标文件夹）
+   */
+  setWorkDir(projectId, workDir) {
+    const project = this.projects.get(projectId);
+    if (!project) throw new Error('项目不存在');
+    project.workDir = (workDir || '').trim();
+    // 同步更新策略脑本地工具安全边界
+    const resolvedWorkspace = project.workDir && project.workDir.trim()
+      ? path.resolve(project.workDir)
+      : path.join(getWorkspaceBase(), projectId);
+    this.planner.setProjectWorkspace(projectId, resolvedWorkspace);
+    this._addMessage(projectId, 'system', '📂 **工作目录已设置：** ' + String.fromCharCode(96) + (project.workDir || '(未设置，使用内部 workspace)') + String.fromCharCode(96));
+    this._saveProjectsToDisk();
+    return project.workDir;
+  }
+
+  /**
+   * 列出项目工作目录的文件（供前端文件面板展示）
+   */
+  async listWorkDirFiles(projectId) {
+    const project = this.projects.get(projectId);
+    if (!project) return [];
+    return this._scanWorkDir(project.workDir);
   }
 
   /**
@@ -567,6 +679,7 @@ export class Orchestrator extends EventEmitter {
     if (ctrl) ctrl.abort();
     this.abortControllers.delete(projectId);
     this.planner.clearHistory(projectId);
+    this.planner.clearWorkspace(projectId);
     this.projects.delete(projectId);
     this._saveProjectsToDisk();
   }

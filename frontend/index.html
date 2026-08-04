@@ -3,30 +3,35 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Orchestrator — 双脑协作工作台</title>
-  <meta name="description" content="Orchestrator：高性能策略脑（框架与高难度攻坚）+ 较低性能执行脑（剩余任务落地），OpenAI 兼容外接 API，支持真实联网检索。" />
+  <title>AI Orchestrator — 双脑协同仪表盘</title>
+  <meta name="description" content="AI-Orchestrator Dashboard：策略脑 × 执行脑 双脑协同，实时调用本地资源能力。" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="app">
-    <!-- 顶部导航 -->
+  <div class="app" id="app">
+
+    <!-- ═══════ 顶部栏 ═══════ -->
     <header class="topbar">
-      <div class="topbar-left">
-        <div class="brand">
-          <span class="brand-mark">◈</span>
-          <span class="brand-name">Orchestrator</span>
-          <span class="brand-ver">v3.2</span>
-        </div>
-        <div class="brand-desc">双脑协作工作台 · 策略 × 执行</div>
+      <div class="brand">
+        <span class="brand-mark">◈</span>
+        <span class="brand-name">AI Orchestrator</span>
+        <span class="brand-badge">双脑协同</span>
       </div>
+      <nav class="nav" id="mainNav">
+        <button class="nav-btn active" data-view="dashboard" onclick="switchView('dashboard')">仪表盘</button>
+        <button class="nav-btn" data-view="projects" onclick="switchView('projects')">项目</button>
+        <button class="nav-btn" data-view="skills" onclick="switchView('skills')">技能库</button>
+        <button class="nav-btn" data-view="tools" onclick="switchView('tools')">本地能力</button>
+        <button class="nav-btn" data-view="settings" onclick="switchView('settings')">设置</button>
+      </nav>
       <div class="topbar-right">
-        <span class="health-indicator" id="healthIndicator">
-          <span class="dot dot-green"></span><span>运行正常</span>
+        <span class="health-chip" id="healthIndicator">
+          <span class="dot dot-green" id="healthDot"></span><span id="healthText">连接中…</span>
         </span>
-        <span class="stat-chip">并行 <strong id="activeCount">0</strong>/3</span>
+        <span class="stat-chip">进行中 <strong id="activeCount">0</strong></span>
         <span class="stat-chip">项目 <strong id="projectCount">0</strong></span>
         <div class="win-controls" id="winControls" style="display:none">
           <button class="win-btn" id="winMin" title="最小化">–</button>
@@ -36,168 +41,334 @@
       </div>
     </header>
 
-    <div class="shell">
-      <!-- 左侧深色导航栏 -->
-      <aside class="rail">
-        <div class="rail-scroll">
-          <section class="rail-sec">
-            <div class="rail-label">新建项目</div>
-            <div class="new-card">
-              <textarea id="projectInput" rows="3" placeholder="描述一个想法，策略脑将拆解框架并分配任务…"></textarea>
-              <button class="btn-accent" id="createProjectBtn" onclick="createProject()">
-                <span class="btn-accent-dot"></span> 启动编排
-              </button>
-            </div>
-          </section>
-
-          <section class="rail-sec">
-            <div class="rail-label">配置</div>
-
-            <div class="rg">
-              <button class="rg-head" onclick="toggleGlobalConfig()">
-                <span class="rg-ico">◎</span><span>模型与接口</span>
-                <span class="rg-caret" id="configToggleIcon">⌄</span>
-              </button>
-              <div class="rg-body" id="globalConfigBody" style="display:none">
-                <div class="rg-block">
-                  <div class="rg-row">
-                    <span class="rg-title">策略脑 <em>高性能</em></span>
-                    <label class="sw">
-                      <input type="checkbox" id="plannerWebSearchToggle" checked />
-                      <span class="sw-track"></span><span class="sw-txt">联网</span>
-                    </label>
-                  </div>
-                  <div class="rg-fields">
-                    <input type="text" id="plannerBaseUrl" placeholder="接口地址 Base URL" />
-                    <input type="password" id="plannerApiKey" placeholder="API Key" />
-                    <input type="text" id="plannerCustomModel" placeholder="模型 (高性能，如 gpt-4o)" />
-                  </div>
-                </div>
-                <div class="rg-block">
-                  <div class="rg-row">
-                    <span class="rg-title">执行脑 <em>低性能</em></span>
-                    <label class="sw">
-                      <input type="checkbox" id="executorWebSearchToggle" checked />
-                      <span class="sw-track"></span><span class="sw-txt">联网</span>
-                    </label>
-                  </div>
-                  <div class="rg-fields">
-                    <input type="text" id="executorBaseUrl" placeholder="接口地址 Base URL" />
-                    <input type="password" id="executorApiKey" placeholder="API Key" />
-                    <input type="text" id="executorCustomModel" placeholder="模型 (低性能，如 gpt-4o-mini)" />
-                  </div>
-                </div>
-                <div class="rg-block">
-                  <div class="rg-row">
-                    <span class="rg-title">迭代轮数</span>
-                    <div class="iter-ctl">
-                      <input type="number" id="maxIterationsInput" value="3" min="1" max="10" />
-                      <span>轮</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="rg">
-              <button class="rg-head" onclick="toggleSkillMenu()">
-                <span class="rg-ico">◇</span><span>应用技能 · <strong id="selectedSkillName">B站 Toy</strong></span>
-                <span class="rg-caret" id="skillArrow">⌄</span>
-              </button>
-              <div class="rg-body" id="skillDropdown" style="display:none"></div>
-            </div>
-
-            <div class="rg">
-              <button class="rg-head" onclick="toggleAlchemyPanel()">
-                <span class="rg-ico">✦</span><span>技能工坊</span>
-                <span class="rg-caret" id="alchemyArrow">⌄</span>
-              </button>
-              <div class="rg-body" id="alchemyBody" style="display:none">
-                <label class="rg-field-label" for="alchemyUrls">信源地址</label>
-                <textarea id="alchemyUrls" rows="2" placeholder="每行一个 URL 或仓库…"></textarea>
-                <label class="rg-field-label" for="alchemyInstruction">补充要求</label>
-                <input type="text" id="alchemyInstruction" placeholder="可选，如关注某类规范…" />
-                <button class="btn-sub" id="alchemyRunBtn" onclick="runSkillAlchemy()">提炼并生成技能</button>
-                <div class="alch-status" id="alchemyStatusBox" style="display:none">
-                  <div class="alch-stage" id="alchemyStageIndicator"><span class="spinner"></span> 处理中…</div>
-                  <div class="alch-stream" id="alchemyStreamOutput"></div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section class="rail-sec grow">
-            <div class="rail-label">项目</div>
-            <div class="project-list" id="projectList"></div>
-          </section>
+    <!-- ═══════ 左侧栏 ═══════ -->
+    <aside class="sidebar" id="sidebar">
+      <div class="side-section">
+        <div class="side-title">导航</div>
+        <div class="side-nav">
+          <button class="side-item active" data-view="dashboard" onclick="switchView('dashboard')"><span class="s-ico">▦</span>仪表盘</button>
+          <button class="side-item" data-view="projects" onclick="switchView('projects')"><span class="s-ico">◈</span>项目</button>
+          <button class="side-item" data-view="skills" onclick="switchView('skills')"><span class="s-ico">✦</span>技能库</button>
+          <button class="side-item" data-view="tools" onclick="switchView('tools')"><span class="s-ico">⌬</span>本地能力</button>
+          <button class="side-item" data-view="settings" onclick="switchView('settings')"><span class="s-ico">⚙</span>设置</button>
         </div>
-      </aside>
+      </div>
 
-      <!-- 主工作台 -->
-      <main class="stage">
-        <div class="projects-grid" id="projectsGrid"></div>
+      <div class="side-section side-tools">
+        <div class="side-title">策略脑 · 本地工具</div>
+        <div class="side-tool-list" id="sideToolList">
+          <div class="side-tool-empty">加载中…</div>
+        </div>
+      </div>
 
-        <!-- 项目工作区 -->
-        <section class="workspace" id="messageArea" style="display:none">
-          <div class="ws-head">
-            <div class="ws-title-box">
-              <h1 id="selectedProjectTitle">未选择项目</h1>
-              <div class="ws-meta">
-                <span class="status-pill" id="selectedProjectStatus">—</span>
-                <span class="iter-pill" id="iterationDisplay">第 1 / 3 轮</span>
-                <select id="executorModelSelect" onchange="changeExecutorModel(this.value)">
-                  <option value="gpt-4o-mini">gpt-4o-mini · 低性能</option>
-                  <option value="gpt-4o">gpt-4o</option>
-                  <option value="claude-sonnet-4.6">Claude Sonnet 4.6</option>
-                  <option value="deepseek-chat">DeepSeek Chat</option>
-                  <option value="Qwen/Qwen2.5-7B-Instruct">Qwen2.5-7B · 低性能</option>
-                </select>
+      <div class="side-section side-footer">
+        <div class="side-health">
+          <span class="mini-label">策略脑</span>
+          <span class="mini-val" id="sideStrategyModel">—</span>
+        </div>
+        <div class="side-health">
+          <span class="mini-label">执行脑</span>
+          <span class="mini-val" id="sideExecutorModel">—</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ═══════ 主内容 ═══════ -->
+    <main class="main" id="main">
+
+      <!-- ─── 仪表盘 ─── -->
+      <section class="view active" id="viewDashboard">
+        <!-- 创建项目 Hero -->
+        <div class="hero-card glass">
+          <div class="hero-grid">
+            <div class="hero-text">
+              <h1>从一个想法开始 ✦</h1>
+              <p><span class="p-blue">策略脑</span>规划架构与攻坚难点，<span class="p-green">执行脑</span>以 Agent 方式在本地实时落盘代码，支持读取/写入文件、列目录、联网搜索。</p>
+            </div>
+            <div class="hero-form">
+              <textarea id="projectInput" rows="3" placeholder="描述你的想法…  例如：帮我做一个可双端自适应的猫娘互动小游戏"></textarea>
+              <div class="hero-form-row">
+                <input type="text" id="workDirInput" placeholder="工作目录（可选，Agent 将在此实时写入/修改文件）" />
+              </div>
+              <div class="hero-form-row hero-launch">
+                <div class="launch-skill" id="launchSkillWrap">
+                  <label class="mini-field-label">项目技能</label>
+                  <select id="launchSkillSelect"></select>
+                </div>
+                <div class="launch-mode">
+                  <label class="mini-field-label">模式</label>
+                  <select id="launchModeSelect">
+                    <option value="standard">标准</option>
+                    <option value="creative">创意</option>
+                  </select>
+                </div>
+                <div class="launch-iter">
+                  <label class="mini-field-label">迭代轮数</label>
+                  <input type="number" id="launchIterInput" value="3" min="1" max="10" />
+                </div>
+                <button class="btn-launch" id="createProjectBtn" onclick="createProject()">
+                  <span class="launch-dot"></span> 启动编排
+                </button>
               </div>
             </div>
-            <div class="ws-actions">
-              <button class="btn-ghost" onclick="openReview(selectedProjectId)" title="打开审查台">查看成果</button>
-              <button class="btn-ghost" onclick="exportResult()" title="导出结果">导出</button>
-              <button class="btn-ghost" onclick="clearMessages()" title="清空显示">清空</button>
+          </div>
+        </div>
+
+        <!-- 统计卡片 -->
+        <div class="stats-row">
+          <div class="stat-card glass"><span class="stat-num" id="statTotal">0</span><span class="stat-label">项目总数</span></div>
+          <div class="stat-card glass"><span class="stat-num" id="statActive">0</span><span class="stat-label">进行中</span></div>
+          <div class="stat-card glass"><span class="stat-num" id="statDone">0</span><span class="stat-label">已完成</span></div>
+          <div class="stat-card glass"><span class="stat-num" id="statTools">0</span><span class="stat-label">本地工具</span></div>
+        </div>
+
+        <div class="dash-grid">
+          <div class="card glass dash-recent">
+            <div class="card-head">
+              <div class="card-title">最近项目</div>
+              <button class="btn-link" onclick="switchView('projects')">查看全部 →</button>
+            </div>
+            <div class="recent-projects" id="recentProjects">
+              <div class="empty-state">暂无项目，在上方输入想法并启动编排吧。</div>
+            </div>
+          </div>
+          <div class="card glass dash-activity">
+            <div class="card-head">
+              <div class="card-title">Agent 动态</div>
+            </div>
+            <div class="activity-feed" id="activityFeed">
+              <div class="empty-state">暂无动态，启动项目后在此查看双脑的实时操作。</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── 项目 ─── -->
+      <section class="view" id="viewProjects">
+        <div class="proj-layout">
+          <!-- 项目列表栏 -->
+          <div class="proj-rail glass">
+            <div class="rail-head">
+              <span class="rail-title">项目</span>
+              <button class="btn-round" onclick="switchView('dashboard')" title="新建项目">＋</button>
+            </div>
+            <div class="project-list" id="projectList">
+              <div class="empty-state">暂无项目</div>
             </div>
           </div>
 
-          <!-- 执行过程 -->
-          <div class="proc">
-            <button class="proc-head" onclick="toggleThoughts()">
-              <span>执行过程</span>
-              <span class="proc-caret" id="thoughtsToggleIcon">⌄</span>
-            </button>
-            <div class="proc-body" id="thoughtsBody">
-              <div class="proc-empty" id="thoughtPlaceholder">等待策略脑 / 执行脑输出…</div>
+          <!-- 项目详情主区域 -->
+          <div class="proj-main" id="projMain">
+            <div class="proj-empty glass" id="noSelection">
+              <div class="pe-icon">◈</div>
+              <h3>选择或创建一个项目</h3>
+              <p>项目运行后，可在此实时查看 <b>策略脑规划</b>、<b>执行脑文件落地</b>、<b>本地工具调用</b> 与 <b>成果预览</b>。</p>
             </div>
+
+            <!-- 项目工作区（选中后显示） -->
+            <section class="workspace" id="messageArea" style="display:none">
+              <!-- 头部 -->
+              <div class="ws-head">
+                <div class="ws-title-box">
+                  <h1 id="selectedProjectTitle">未选择项目</h1>
+                  <div class="ws-meta">
+                    <span class="status-pill" id="selectedProjectStatus">—</span>
+                    <span class="iter-pill" id="iterationDisplay">第 1 / 3 轮</span>
+                    <span class="skill-pill" id="selectedProjectSkill">—</span>
+                  </div>
+                </div>
+                <div class="ws-actions">
+                  <button class="btn-ghost" onclick="openReview(selectedProjectId)" title="成果审查">审查</button>
+                  <button class="btn-ghost" onclick="exportResult()" title="导出">导出</button>
+                </div>
+              </div>
+
+              <!-- 进度条 -->
+              <div class="progress-wrap">
+                <div class="progress-track">
+                  <div class="progress-fill" id="projectProgressBar" style="width:0%"></div>
+                </div>
+                <span class="progress-text" id="projectProgressText">0%</span>
+              </div>
+
+              <!-- 双脑状态 + 操作 -->
+              <div class="brain-strip">
+                <div class="brain-card brain-planner glass-mini">
+                  <span class="brain-dot dot-blue"></span>
+                  <span class="brain-name">策略脑</span>
+                  <span class="brain-state" id="plannerStatus">待命</span>
+                </div>
+                <div class="brain-card brain-executor glass-mini">
+                  <span class="brain-dot dot-green"></span>
+                  <span class="brain-name">执行脑</span>
+                  <span class="brain-state" id="executorStatus">待命</span>
+                </div>
+                <div class="brain-actions">
+                  <button class="btn-stop" id="stopBtn" onclick="stopGeneration()" style="display:none">⏹ 中止</button>
+                  <button class="btn-retry" id="retryBtn" onclick="retryProject()" style="display:none">↻ 重试</button>
+                  <button class="btn-ghost" onclick="setProjectWorkDir()" title="设置工作目录">📂 目录</button>
+                </div>
+              </div>
+
+              <!-- 工作目录 + 文件树 + 工具调用 -->
+              <div class="agent-bar">
+                <input type="text" id="projWorkDirInput" placeholder="Agent 工作目录（留空使用内部 workspace）" />
+                <button class="btn-sub" onclick="setProjectWorkDir()">设置</button>
+                <button class="btn-sub" onclick="toggleFilesPanel()">📁 文件树</button>
+                <button class="btn-sub" onclick="toggleToolsPanel()">🛠 工具记录 <span id="toolCountBadge" class="badge">0</span></button>
+              </div>
+
+              <div class="dual-panel">
+                <div class="files-panel" id="filesPanel" style="display:none">
+                  <div class="panel-title">工作区文件</div>
+                  <div class="files-list" id="filesList"><div class="empty-state">暂无文件，Agent 实时写入后将出现在这里。</div></div>
+                </div>
+                <div class="tools-panel" id="toolsPanel" style="display:none">
+                  <div class="panel-title">双脑本地工具调用</div>
+                  <div class="tools-list" id="toolsList"><div class="empty-state">暂无工具调用，双脑调用本地工具时将实时展示。</div></div>
+                </div>
+              </div>
+
+              <!-- 思考流（执行过程） -->
+              <div class="proc glass-mini">
+                <button class="proc-head" onclick="toggleThoughts()">
+                  <span>🧠 思考流 · 策略脑 / 执行脑推理过程</span>
+                  <span class="proc-caret" id="thoughtsToggleIcon">⌄</span>
+                </button>
+                <div class="proc-body" id="thoughtsBody">
+                  <div class="proc-empty" id="thoughtPlaceholder">等待双脑输出推理过程…</div>
+                </div>
+              </div>
+
+              <!-- 消息流 -->
+              <div class="outlog" id="messagesContainer"></div>
+              <div class="stream-panel" id="streamOutput"></div>
+
+              <!-- 介入栏 -->
+              <div class="intervene glass-mini">
+                <div class="attach-list" id="attachmentPreview"></div>
+                <div class="at-menu" id="atMenu" style="display:none">
+                  <div class="at-item" data-value="@策略脑 ">🔵 策略脑 — 规划与回答</div>
+                  <div class="at-item" data-value="@执行脑 ">🟢 执行脑 — 生成与落地</div>
+                  <div class="at-item" data-value="@全体 ">⚡ 全体 — 双脑协同</div>
+                </div>
+                <div class="intervene-bar">
+                  <button class="btn-attach" onclick="triggerFileInput()" title="上传参考文件">＋</button>
+                  <input type="file" id="interveneFileInput" multiple style="display:none" onchange="handleFileSelect(event)" />
+                  <input type="text" id="interveneInput" placeholder="实时介入… @ 可指定目标脑" onkeydown="handleInterveneKey(event)" oninput="handleInterveneInput(event)" />
+                  <button class="btn-send" id="interveneBtn" onclick="sendIntervention()">发送</button>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── 技能库 ─── -->
+      <section class="view" id="viewSkills">
+        <div class="skills-layout">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">技能应用</div>
+              <span class="badge" id="selectedSkillName">B站 Toy</span>
+            </div>
+            <div class="skill-selector" id="skillSelector"></div>
           </div>
 
-          <!-- 输出日志 -->
-          <div class="outlog" id="messagesContainer"></div>
-          <div class="stream-panel" id="streamOutput"></div>
-
-          <!-- 介入栏 -->
-          <div class="intervene">
-            <div class="attach-list" id="attachmentPreview"></div>
-            <div class="at-menu" id="atMenu" style="display:none">
-              <div class="at-item" data-value="@策略脑 ">策略脑 — 规划与回答</div>
-              <div class="at-item" data-value="@执行脑 ">执行脑 — 生成与落地</div>
-              <div class="at-item" data-value="@全体 ">全体 — 双脑协同调整</div>
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">技能工坊</div>
             </div>
-            <div class="intervene-bar">
-              <button class="btn-attach" onclick="triggerFileInput()" title="上传参考文件">＋</button>
-              <input type="file" id="interveneFileInput" multiple style="display:none" onchange="handleFileSelect(event)" />
-              <input type="text" id="interveneInput" placeholder="输入介入指导，@ 可指定目标脑…" onkeydown="handleInterveneKey(event)" oninput="handleInterveneInput(event)" />
-              <button class="btn-stop" id="stopBtn" onclick="stopGeneration()" title="中止" style="display:none">中止</button>
-              <button class="btn-retry" id="retryBtn" onclick="retryProject()" title="重试" style="display:none">重试</button>
-              <button class="btn-send" id="interveneBtn" onclick="sendIntervention()">发送</button>
+            <div class="rg-head" onclick="toggleAlchemyPanel()">
+              <span class="rg-ico">✦</span><span>从信源提炼技能</span>
+              <span class="rg-caret" id="alchemyArrow">⌄</span>
+            </div>
+            <div class="alchemy-body" id="alchemyBody" style="display:none">
+              <label class="rg-field-label" for="alchemyUrls">信源地址</label>
+              <textarea id="alchemyUrls" rows="3" placeholder="每行一个 URL 或仓库…"></textarea>
+              <label class="rg-field-label" for="alchemyInstruction">补充要求</label>
+              <input type="text" id="alchemyInstruction" placeholder="可选，如关注某类规范…" />
+              <button class="btn-sub" id="alchemyRunBtn" onclick="runSkillAlchemy()">提炼并生成技能</button>
+              <div class="alch-status" id="alchemyStatusBox" style="display:none">
+                <div class="alch-stage" id="alchemyStageIndicator"><span class="spinner"></span> 处理中…</div>
+                <div class="alch-stream" id="alchemyStreamOutput"></div>
+              </div>
             </div>
           </div>
-        </section>
-      </main>
-    </div>
+        </div>
+      </section>
 
-    <!-- 审查台 -->
+      <!-- ─── 本地能力 ─── -->
+      <section class="view" id="viewTools">
+        <div class="tools-layout">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">🛠 策略脑 / 执行脑 · 本地资源能力</div>
+            </div>
+            <p class="tools-desc">
+              双脑运行时会通过 OpenAI tool-calling 实时调用以下本地能力，在项目工作区安全边界内读写文件、列出目录、执行受限命令与联网搜索。所有调用均在项目详情的「工具记录」中实时展示。
+            </p>
+            <div class="tools-grid" id="toolsGrid">
+              <div class="empty-state">加载中…</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── 设置 ─── -->
+      <section class="view" id="viewSettings">
+        <div class="settings-layout">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">模型与接口配置</div>
+            </div>
+            <div class="rg-block">
+              <div class="rg-row">
+                <span class="rg-title">策略脑 <em>高性能</em></span>
+                <label class="sw">
+                  <input type="checkbox" id="plannerWebSearchToggle" checked />
+                  <span class="sw-track"></span><span class="sw-txt">联网</span>
+                </label>
+              </div>
+              <div class="rg-fields">
+                <input type="text" id="plannerBaseUrl" placeholder="接口地址 Base URL" />
+                <input type="password" id="plannerApiKey" placeholder="API Key" />
+                <input type="text" id="plannerCustomModel" placeholder="模型（高性能，如 gpt-4o）" />
+              </div>
+            </div>
+            <div class="rg-block">
+              <div class="rg-row">
+                <span class="rg-title">执行脑 <em>低性能</em></span>
+                <label class="sw">
+                  <input type="checkbox" id="executorWebSearchToggle" />
+                  <span class="sw-track"></span><span class="sw-txt">联网</span>
+                </label>
+              </div>
+              <div class="rg-fields">
+                <input type="text" id="executorBaseUrl" placeholder="接口地址 Base URL" />
+                <input type="password" id="executorApiKey" placeholder="API Key" />
+                <input type="text" id="executorCustomModel" placeholder="模型（低性能，如 gpt-4o-mini）" />
+              </div>
+            </div>
+            <div class="rg-block">
+              <div class="rg-row">
+                <span class="rg-title">迭代轮数</span>
+                <div class="iter-ctl">
+                  <input type="number" id="maxIterationsInput" value="3" min="1" max="10" />
+                  <span>轮</span>
+                </div>
+              </div>
+            </div>
+            <div class="rg-block">
+              <button class="btn-sub" onclick="saveSettings()">保存设置</button>
+              <span class="settings-hint">设置将用于新建项目时的默认配置（可覆盖 .env）。</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- ═══════ 成果审查台 ═══════ -->
     <div class="review-panel" id="reviewPanel">
       <div class="review-head">
         <h3>成果审查</h3>

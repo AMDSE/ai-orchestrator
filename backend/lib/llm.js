@@ -70,30 +70,75 @@ export function createExecutorClient(config = null) {
  * @param {function} [options.onChunk]  (type: 'thought'|'content', token) => void
  * @returns {Promise<string>} 拼接后的完整 content
  */
-export async function streamChat({ client, model, messages, temperature = 0.6, signal = null, onChunk = null }) {
-  const stream = await client.chat.completions.create(
+export async function streamChat({ client, model, messages, temperature = 0.6, signal = null, onChunk = null, tools = null, toolChoice = null, stream = true, pushAssistantOnToolCalls = false }) {
+  const response = await client.chat.completions.create(
     {
       model,
       messages,
       temperature,
-      stream: true,
+      stream,
+      ...(tools ? { tools } : {}),
+      ...(toolChoice ? { tool_choice: toolChoice } : {}),
     },
     { signal: signal || undefined, timeout: 180000 }
   );
 
+  if (!stream) {
+    return response.choices?.[0]?.message?.content || '';
+  }
+
   const chunks = [];
-  for await (const chunk of stream) {
-    const delta = chunk.choices[0]?.delta || {};
+  // OpenAI 流式 tool_calls 分片到达，需按 index 累积拼装
+  const accumulatedToolCalls = [];
+
+  for await (const chunk of response) {
+    const choice = chunk.choices?.[0];
+    const delta = choice?.delta || {};
+
+    // 累积流式 tool_calls 分片
+    if (delta?.tool_calls && Array.isArray(delta.tool_calls)) {
+      for (const tc of delta.tool_calls) {
+        const idx = tc.index ?? 0;
+        if (!accumulatedToolCalls[idx]) {
+          accumulatedToolCalls[idx] = { id: tc.id || '', type: 'function', function: { name: '', arguments: '' } };
+        }
+        if (tc.id) accumulatedToolCalls[idx].id = tc.id;
+        if (tc.function?.name) accumulatedToolCalls[idx].function.name += tc.function.name;
+        if (tc.function?.arguments) accumulatedToolCalls[idx].function.arguments += tc.function.arguments;
+      }
+    }
+
     const thoughtToken = delta?.reasoning_content || delta?.thought;
     const contentToken = delta?.content || '';
 
-    if (thoughtToken && onChunk) onChunk('thought', thoughtToken);
+    if (thoughtToken && onChunk) {
+      if (typeof onChunk === 'function') onChunk('thought', thoughtToken);
+      else if (onChunk.thought) onChunk.thought(thoughtToken);
+    }
     if (contentToken) {
       chunks.push(contentToken);
-      if (onChunk) onChunk('content', contentToken);
+      if (onChunk) {
+        if (typeof onChunk === 'function') onChunk('content', contentToken);
+        else if (onChunk.content) onChunk.content(contentToken);
+      }
     }
   }
-  return chunks.join('');
+
+  const fullContent = chunks.join('');
+
+  // 若要求回写，则把完整 assistant 消息推入 messages（有 tool_calls 时带上）：
+  // - 保证 runWithTools 能通过读取最后一条 assistant 消息判断本轮是否产生工具调用
+  // - 无 tool_calls 时也 push 普通 assistant 消息，避免 lastAssistant 解析到旧消息
+  if (pushAssistantOnToolCalls) {
+    const validCalls = accumulatedToolCalls.filter((tc) => tc && tc.id && tc.function?.name);
+    messages.push({
+      role: 'assistant',
+      content: fullContent,
+      ...(validCalls.length > 0 ? { tool_calls: validCalls } : {})
+    });
+  }
+
+  return fullContent;
 }
 
 /**

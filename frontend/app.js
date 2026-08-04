@@ -1,1378 +1,1026 @@
-// frontend/app.js
-// WebSocket 客户端 + 界面交互逻辑（包含实时数据双向同步、动态 Skill 炼化与注册、内联思考过程、双脑外接 API 配置）
+// ==========================================================================
+// AI Orchestrator — Dashboard 前端交互逻辑
+// 策略脑 × 执行脑 双脑协同，本地资源实时调用可视化
+// ==========================================================================
 
-const WS_URL  = `ws://${location.host}`;
-const API_URL = `http://${location.host}`;
+'use strict';
 
+/* ── 全局状态 ─────────────────────────────────────────────── */
 let ws = null;
 let projects = new Map();
-let loadedSkills = []; // 动态存储从后端加载的所有 Skill
+let skills = [];
+let toolDefinitions = [];
 let selectedProjectId = null;
-let currentMode = 'standard'; // 已移除创意模式，固定标准模式
-let currentReviewProject = null;
-let currentTab = 'result';
-let thoughtsMap = new Map(); // projectId -> text
-let thoughtsExpanded = true;
+let currentView = 'dashboard';
+let pendingFiles = [];
+let createdAt = new Date().toISOString();
 
-// 模型与外接 API 全局配置状态
-let plannerProvider = 'custom_api';
-let executorProvider = 'custom_api';
-let globalConfigExpanded = false;
-let attachedFiles = [];
+const $ = (id) => document.getElementById(id);
 
-// 🎯 项目技能全局配置状态
-let selectedSkill = 'bili_toy';
-let skillMenuExpanded = false;
-let alchemyPanelExpanded = false;
+/* ── 工具函数：URL 编码 / 转义 ─────────────────────────────── */
+const esc = (str) => String(str ?? '')
+  .replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>')
+  .replace(/"/g, '"').replace(/'/g, '&#39;');
 
-// ── 🔮 技能炼化面板控制 ────────────────────────────────────────────────────────
-function toggleAlchemyPanel() {
-  alchemyPanelExpanded = !alchemyPanelExpanded;
-  const body = document.getElementById('alchemyBody');
-  const arrow = document.getElementById('alchemyArrow');
-  if (body) body.style.display = alchemyPanelExpanded ? 'flex' : 'none';
-  if (arrow) arrow.classList.toggle('open', alchemyPanelExpanded);
+/* ── Toast 通知 ───────────────────────────────────────────── */
+function toast(msg, type = 'success') {
+  const box = $('toastContainer');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  box.appendChild(el);
+  setTimeout(() => el.remove(), 3200);
 }
 
-function addAlchemyPreset(url) {
-  const textarea = document.getElementById('alchemyUrls');
-  if (!textarea) return;
-  const current = textarea.value.trim();
-  if (current.includes(url)) return;
-  textarea.value = current ? `${current}\n${url}` : url;
-}
+/* ── 视图切换 ─────────────────────────────────────────────── */
+function switchView(view) {
+  currentView = view;
+  document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
+  const target = $('view' + view.charAt(0).toUpperCase() + view.slice(1));
+  if (target) target.classList.add('active');
 
-// 运行技能炼化 (SSE 流式接收进度与生成 Token)
-async function runSkillAlchemy() {
-  const urlsText = document.getElementById('alchemyUrls')?.value || '';
-  const customPrompt = document.getElementById('alchemyInstruction')?.value || '';
-  const urls = urlsText.split('\n').map(u => u.trim()).filter(Boolean);
-
-  if (urls.length === 0) {
-    showToast('⚠️ 请至少输入一个信源 URL', 'error');
-    return;
-  }
-
-  const runBtn = document.getElementById('alchemyRunBtn');
-  const statusBox = document.getElementById('alchemyStatusBox');
-  const stageIndicator = document.getElementById('alchemyStageIndicator');
-  const streamOutput = document.getElementById('alchemyStreamOutput');
-
-  if (runBtn) runBtn.disabled = true;
-  if (statusBox) statusBox.style.display = 'block';
-  if (streamOutput) streamOutput.textContent = '';
-
-  const plannerConfig = getPlannerConfig();
-
-  try {
-    const response = await fetch(`${API_URL}/api/skill-alchemy/run`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ urls, customPrompt, plannerConfig })
-    });
-
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || '炼化请求失败');
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n\n');
-      buffer = lines.pop();
-
-      for (const line of lines) {
-        const cleanLine = line.trim();
-        if (!cleanLine.startsWith('data: ')) continue;
-        try {
-          const event = JSON.parse(cleanLine.slice(6));
-          if (event.type === 'progress') {
-            if (stageIndicator) {
-              stageIndicator.innerHTML = `<span class="spinner-small"></span> ${event.message}`;
-            }
-          } else if (event.type === 'token') {
-            if (streamOutput) {
-              streamOutput.textContent += event.token;
-              streamOutput.scrollTop = streamOutput.scrollHeight;
-            }
-          } else if (event.type === 'complete') {
-            const newSkill = event.skill;
-            showToast(`✨ 技能炼化成功！已保存：${newSkill.name}`, 'success');
-            selectSkill(newSkill.id, newSkill.name);
-            if (stageIndicator) {
-              stageIndicator.innerHTML = `✅ 炼化完成！新技能 <strong>${newSkill.name}</strong> 已自动加载到技能栏`;
-            }
-          } else if (event.type === 'error') {
-            throw new Error(event.message);
-          }
-        } catch (e) {
-          console.warn('[Alchemy SSE Parse Warning]', e.message);
-        }
-      }
-    }
-  } catch (err) {
-    showToast(`❌ 炼化失败: ${err.message}`, 'error');
-    if (stageIndicator) {
-      stageIndicator.innerHTML = `❌ 炼化出错: ${err.message}`;
-    }
-  } finally {
-    if (runBtn) runBtn.disabled = false;
-  }
-}
-
-// ── 🎯 技能列表渲染与选择控制 ────────────────────────────────────────────────
-function renderSkillsList(skills) {
-  loadedSkills = skills;
-  const dropdown = document.getElementById('skillDropdown');
-  if (!dropdown) return;
-
-  dropdown.innerHTML = skills.map(s => {
-    const isActive = s.id === selectedSkill;
-    const icon = s.icon || '🔧';
-    const isBuiltIn = s.builtIn;
-
-    return `
-      <div class="skill-option ${isActive ? 'active' : ''}" data-skill="${s.id}" onclick="selectSkill('${s.id}', '${s.name.replace(/'/g, "\\'")}')">
-        <div class="skill-option-header">
-          <span class="skill-name">${icon} ${s.name}</span>
-          <div style="display:flex; align-items:center; gap:4px;">
-            ${isActive ? '<span class="skill-tag-active">已启用</span>' : ''}
-            ${!isBuiltIn ? `<button class="btn-delete-skill" onclick="deleteSkill(event, '${s.id}')" title="删除此炼化技能">✕</button>` : ''}
-          </div>
-        </div>
-        <div class="skill-desc">${s.description || '无描述'}</div>
-      </div>
-    `;
-  }).join('');
-
-  // 同步已选技能显示名称
-  const cur = skills.find(s => s.id === selectedSkill);
-  if (cur) {
-    const nameEl = document.getElementById('selectedSkillName');
-    if (nameEl) nameEl.textContent = cur.name;
-  }
-}
-
-async function deleteSkill(event, skillId) {
-  event.stopPropagation();
-  if (!confirm('确定删除该炼化技能吗？')) return;
-
-  try {
-    const res = await fetch(`${API_URL}/api/skills/${skillId}`, { method: 'DELETE' });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error);
-    }
-    showToast('🗑️ 技能已删除', 'info');
-    if (selectedSkill === skillId) {
-      selectSkill('bili_toy', '🎮 B站 Toy 互动规范');
-    }
-  } catch (e) {
-    showToast(`删除技能失败: ${e.message}`, 'error');
-  }
-}
-
-function toggleSkillMenu() {
-  skillMenuExpanded = !skillMenuExpanded;
-  const dropdown = document.getElementById('skillDropdown');
-  const arrow = document.getElementById('skillArrow');
-  if (dropdown) dropdown.style.display = skillMenuExpanded ? 'flex' : 'none';
-  if (arrow) arrow.classList.toggle('open', skillMenuExpanded);
-}
-
-function selectSkill(skillId, skillName) {
-  selectedSkill = skillId;
-  const nameEl = document.getElementById('selectedSkillName');
-  if (nameEl) nameEl.textContent = skillName;
-
-  document.querySelectorAll('.skill-option').forEach(opt => {
-    const isActive = opt.dataset.skill === skillId;
-    opt.classList.toggle('active', isActive);
+  document.querySelectorAll('.nav-btn, .side-item').forEach((b) => {
+    b.classList.toggle('active', b.dataset.view === view);
   });
 
-  if (skillMenuExpanded) toggleSkillMenu();
-  showToast(`🎯 已切换项目技能为：${skillName}`, 'info');
+  if (view === 'projects') renderProjectList();
+  if (view === 'tools') loadToolDefinitions();
+  if (view === 'skills') renderSkillSelector();
 }
 
-
-let reconnectTimer = null;
-
+/* ── WebSocket 连接 ───────────────────────────────────────── */
 function connectWS() {
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
-
-  ws = new WebSocket(WS_URL);
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}`);
 
   ws.onopen = () => {
+    setHealth(true);
     console.log('[WS] Connected');
-    updateHealth(true);
-  };
-
-  ws.onmessage = ({ data }) => {
-    try {
-      const msg = JSON.parse(data);
-      handleServerMessage(msg);
-    } catch (e) {
-      console.error('[WS] Parse error', e);
-    }
   };
 
   ws.onclose = () => {
-    updateHealth(false);
-    if (!reconnectTimer) {
-      reconnectTimer = setTimeout(() => {
-        reconnectTimer = null;
-        connectWS();
-      }, 3000);
-    }
+    setHealth(false);
+    setTimeout(connectWS, 2000);
   };
 
-  ws.onerror = () => ws.close();
+  ws.onerror = () => { setHealth(false); };
+
+  ws.onmessage = (event) => {
+    let data;
+    try { data = JSON.parse(event.data); } catch { return; }
+    handleWSMessage(data);
+  };
 }
 
-function handleServerMessage(msg) {
-  if (msg.type === 'init') {
-    projects.clear();
-    for (const project of msg.projects) {
-      projects.set(project.id, project);
-    }
-    if (msg.skills) {
-      renderSkillsList(msg.skills);
-    }
+function setHealth(ok) {
+  const dot = $('healthDot');
+  const text = $('healthText');
+  if (dot) dot.className = `dot ${ok ? 'dot-green' : 'dot-red'}`;
+  if (text) text.textContent = ok ? '实时连接' : '连接断开';
+}
+
+function handleWSMessage(data) {
+  if (data.type === 'init') {
+    skills = data.skills || [];
+    (data.projects || []).forEach((p) => projects.set(p.id, p));
     renderAll();
-
-    if (!selectedProjectId && projects.size > 0) {
-      const latestProject = [...projects.values()].reverse()[0];
-      if (latestProject) selectProject(latestProject.id);
-    } else if (selectedProjectId && projects.has(selectedProjectId)) {
-      selectProject(selectedProjectId);
-    }
     return;
   }
 
-  if (msg.type === 'skills_updated') {
-    if (msg.skills) {
-      renderSkillsList(msg.skills);
-    }
+  if (data.type === 'skills_updated') {
+    skills = data.skills || [];
+    renderSkillSelector();
     return;
   }
 
-  if (msg.type === 'orchestrator_update') {
-    const { projectId, type, data } = msg;
+  if (data.type === 'orchestrator_update') {
+    const { projectId, type, data: d } = data;
+    const project = projectId && projects.get(projectId);
 
-    let p = projects.get(projectId);
-    if (!p) {
-      if (data.project) {
-        p = data.project;
-        projects.set(projectId, p);
-      } else {
-        p = { id: projectId, messages: [], status: 'planning', progress: 0, iteration: 1, maxIterations: 3 };
-        projects.set(projectId, p);
+    switch (type) {
+      case 'project_created': {
+        projects.set(projectId, { ...d.project, toolCalls: [] });
+        break;
+      }
+      case 'status_change': {
+        if (project) project.status = d.status;
+        updateProjectStatus(projectId);
+        break;
+      }
+      case 'project_queued': {
+        if (project) project.status = 'queued';
+        updateProjectStatus(projectId);
+        break;
+      }
+      case 'plan_ready': {
+        if (project) {
+          project.plan = d.plan;
+          project.tasks = d.plan?.tasks || [];
+          project.iteration = d.iteration || 1;
+        }
+        break;
+      }
+      case 'task_start': {
+        if (project) project.progress = d.progress;
+        break;
+      }
+      case 'task_complete': {
+        if (project) {
+          project.progress = d.progress;
+          const task = project.tasks?.find((t) => t.id === d.taskId);
+          if (task) task.output = d.output;
+        }
+        break;
+      }
+      case 'iteration_update': {
+        if (project) project.iteration = d.iteration;
+        break;
+      }
+      case 'project_complete': {
+        if (project) {
+          project.status = 'completed';
+          project.result = d.result;
+          project.completedAt = d.completedAt;
+          project.progress = 100;
+        }
+        break;
+      }
+      case 'message': {
+        if (project) {
+          project.messages = project.messages || [];
+          project.messages.push(d.message);
+          if (selectedProjectId === projectId) appendMessage(d.message);
+        }
+        break;
+      }
+      case 'thought': {
+        if (selectedProjectId === projectId) appendThought(d.role, d.token);
+        break;
+      }
+      case 'planner_token':
+      case 'token': {
+        if (selectedProjectId === projectId) appendStreamToken(d.token);
+        break;
+      }
+      case 'file_action': {
+        if (project) {
+          project.fileActions = project.fileActions || [];
+          project.fileActions.push(d.action);
+          if (selectedProjectId === projectId) renderFiles();
+        }
+        break;
+      }
+      case 'tool_call': {
+        if (project) {
+          project.toolCalls = project.toolCalls || [];
+          project.toolCalls.push(d.record);
+          if (selectedProjectId === projectId) renderToolCalls();
+        }
+        addActivity(`🛠 双脑调用本地工具：${d.record?.tool || ''}`);
+        break;
+      }
+      case 'config_change': {
+        if (project) {
+          project.plannerConfig = d.plannerConfig;
+          project.executorConfig = d.executorConfig;
+          project.maxIterations = d.maxIterations;
+        }
+        break;
+      }
+      case 'intervention_processed': {
+        break;
       }
     }
 
-    let skipFullRender = false;
-
-    switch (type) {
-      case 'project_created':
-        if (data.project) projects.set(projectId, data.project);
-        break;
-
-      case 'status_change':
-        if (p) {
-          p.status = data.status;
-          if (data.currentTaskIndex !== undefined) p.currentTaskIndex = data.currentTaskIndex;
-          if (data.progress !== undefined) p.progress = data.progress;
-        }
-        break;
-
-      case 'task_start':
-        if (p) {
-          p.status = 'executing';
-          p.currentTaskIndex = data.taskIndex;
-          p.progress = data.progress || p.progress;
-          clearProjectStreamOutput(projectId);
-        }
-        break;
-
-      case 'iteration_update':
-        if (p) {
-          p.iteration = data.iteration;
-          p.maxIterations = data.maxIterations;
-        }
-        break;
-
-      case 'config_change':
-      case 'model_change':
-        if (p) {
-          if (data.executorConfig) p.executorConfig = data.executorConfig;
-          if (data.plannerConfig) p.plannerConfig = data.plannerConfig;
-          if (data.maxIterations) p.maxIterations = data.maxIterations;
-          if (data.iteration) p.iteration = data.iteration;
-          if (data.model && p.executorConfig) p.executorConfig.model = data.model;
-
-          if (projectId === selectedProjectId) {
-            const selectEl = document.getElementById('executorModelSelect');
-            if (selectEl && p.executorConfig?.model) {
-              selectEl.value = p.executorConfig.model;
-            }
-          }
-        }
-        break;
-
-      case 'plan_ready':
-        if (p) {
-          p.plan = data.plan;
-          p.tasks = data.plan.tasks || [];
-          p.progress = 10;
-          if (data.iteration) p.iteration = data.iteration;
-        }
-        break;
-
-      case 'message':
-        if (p) {
-          if (!p.messages) p.messages = [];
-          p.messages.push(data.message);
-          if (projectId === selectedProjectId) {
-            appendMessage(data.message);
-          }
-        }
-        break;
-
-      case 'thought':
-        appendThought(projectId, data.role, data.token);
-        skipFullRender = true;
-        break;
-
-      case 'planner_token':
-        appendProjectStreamToken(projectId, 'planner', data.token);
-        skipFullRender = true;
-        break;
-
-      case 'token':
-        appendProjectStreamToken(projectId, 'executor', data.token);
-        skipFullRender = true;
-        break;
-
-      case 'task_complete':
-        if (p) {
-          p.progress = data.progress || p.progress;
-          clearProjectStreamOutput(projectId);
-          const task = p.tasks?.find(t => t.id === data.taskId);
-          if (task) task.output = data.output;
-        }
-        break;
-
-      case 'project_complete':
-        if (p) {
-          p.status      = 'completed';
-          p.completedAt = data.completedAt;
-          p.result      = data.result;
-          p.progress    = 100;
-          clearProjectStreamOutput(projectId);
-          showToast(`✅ 项目完成！`, 'success');
-        }
-        break;
-
-      case 'project_queued':
-        if (p) p.status = 'queued';
-        break;
-    }
-
-    // 无论是否跳过全量 DOM 销毁重绘，始终精准微调左侧列表项的进度与指示灯 UI
-    updateProjectListItemUI(projectId);
-
-    // 高频 token/thought 传输时跳过 renderAll 全量 DOM 销毁重绘，提升流畅度
-    if (!skipFullRender) {
-      renderAll();
-    }
+    renderProjectList();
+    if (selectedProjectId) renderSelectedProject();
   }
 }
 
-// ── 界面全量实时渲染 ────────────────────────────────────────────────────────
-function renderAll() {
-  renderProjectsGrid();
-  renderProjectList();
-  updateActiveCount();
-  updateSelectedProjectHeader();
-  updateHealth(ws && ws.readyState === WebSocket.OPEN);
+/* ── 健康检查 + 工具加载 ──────────────────────────────────── */
+async function loadHealth() {
+  try {
+    const r = await fetch('/api/health');
+    const h = await r.json();
+    $('sideStrategyModel').textContent = h.strategyModel || '—';
+    $('sideExecutorModel').textContent = h.executorModel || '—';
+    $('statTools').textContent = h.localTools || 0;
+  } catch {}
 }
 
-function updateActiveCount() {
-  let active = 0;
-  for (const p of projects.values()) {
-    if (['planning','executing','waiting_answer'].includes(p.status)) active++;
-  }
-  document.getElementById('activeCount').textContent = active;
-  document.getElementById('projectCount').textContent = projects.size;
+async function loadToolDefinitions() {
+  try {
+    const r = await fetch('/api/tools');
+    const data = await r.json();
+    toolDefinitions = data.tools || [];
+    renderToolDefinitions();
+    renderSideTools();
+    $('statTools').textContent = toolDefinitions.length;
+  } catch { }
 }
 
-function renderProjectList() {
-  const list = document.getElementById('projectList');
-  if (projects.size === 0) {
-    list.innerHTML = `<div class="empty-state"><span>还没有项目</span><small>输入想法后点击启动</small></div>`;
+function renderToolDefinitions() {
+  const grid = $('toolsGrid');
+  if (!grid) return;
+  if (!toolDefinitions.length) {
+    grid.innerHTML = '<div class="empty-state">暂无本地工具数据</div>';
     return;
   }
-  list.innerHTML = [...projects.values()].reverse().map(p => {
-    const progress = Math.round(p.progress || 0);
-    return `
-    <div class="project-list-item ${selectedProjectId === p.id ? 'active' : ''}"
-         data-id="${p.id}"
-         onclick="selectProject('${p.id}')">
-      <div class="pli-content">
-        <div class="pli-title" id="pli-title-${p.id}">${p.plan?.title || p.userInput?.substring(0, 26) || '新项目'}${p.userInput?.length > 26 && !p.plan?.title ? '…' : ''}</div>
-        <div class="pli-meta">
-          <span class="pli-status-text" id="pli-status-${p.id}">${statusLabel(p.status)} · ${progress}% · 🔄 ${p.iteration || 1}/${p.maxIterations || 3}轮</span>
-        </div>
-        <div class="pli-progress-bar">
-          <div class="pli-progress-fill fill-${p.status}" id="pli-bar-${p.id}" style="width:${progress}%"></div>
-        </div>
+  grid.innerHTML = toolDefinitions.map((t) => `
+    <div class="tool-card">
+      <div class="tool-card-head">
+        <span class="s-ico">⌬</span>
+        <span class="tool-card-name">${esc(t.name)}</span>
       </div>
-      <div class="pli-dot-right" id="pli-dot-${p.id}">
-        ${statusIndicatorDotPure(p.status)}
-      </div>
-      <div class="pli-delete-wrapper">
-        <span class="pli-delete-btn" onclick="deleteProject('${p.id}', event)" title="删除项目">🗑️</span>
-      </div>
-    </div>
-  `}).join('');
-}
-
-function updateProjectListItemUI(projectId) {
-  const p = projects.get(projectId);
-  if (!p) return;
-
-  const progress = Math.round(p.progress || 0);
-  const statusEl = document.getElementById(`pli-status-${projectId}`);
-  const barEl = document.getElementById(`pli-bar-${projectId}`);
-  const dotEl = document.getElementById(`pli-dot-${projectId}`);
-  const titleEl = document.getElementById(`pli-title-${projectId}`);
-
-  if (titleEl) {
-    const isLong = p.userInput?.length > 26 && !p.plan?.title;
-    titleEl.textContent = `${p.plan?.title || p.userInput?.substring(0, 26) || '新项目'}${isLong ? '…' : ''}`;
-  }
-  if (statusEl) {
-    statusEl.textContent = `${statusLabel(p.status)} · ${progress}% · 🔄 ${p.iteration || 1}/${p.maxIterations || 3}轮`;
-  }
-  if (barEl) {
-    barEl.style.width = `${progress}%`;
-    barEl.className = `pli-progress-fill fill-${p.status}`;
-  }
-  if (dotEl) {
-    dotEl.innerHTML = statusIndicatorDotPure(p.status);
-  }
-}
-
-function renderProjectsGrid() {
-  const grid = document.getElementById('projectsGrid');
-  if (selectedProjectId) {
-    grid.style.display = 'none';
-    return;
-  }
-  grid.style.display = 'grid';
-
-  if (projects.size === 0) {
-    grid.innerHTML = `
-      <div class="grid-placeholder" id="gridPlaceholder">
-        <div class="placeholder-icon">◈</div>
-        <h3>开始一个新项目</h3>
-        <p>在左侧描述你的想法。策略脑将拆解整体框架、攻克高难度部分，并把剩余任务分派给执行脑落地。</p>
-        <div class="flow-diagram">
-          <div class="flow-item blue">策略脑<small>高性能 · 框架与攻坚</small></div>
-          <div class="flow-arrow">→</div>
-          <div class="flow-item green">执行脑<small>低性能 · 落地填充</small></div>
-          <div class="flow-arrow">→</div>
-          <div class="flow-item yellow">成果<small>审查与导出</small></div>
-        </div>
-      </div>`;
-    return;
-  }
-
-  grid.innerHTML = [...projects.values()].map(p => renderProjectCard(p)).join('');
-}
-
-function renderProjectCard(p) {
-  const title = p.plan?.title || p.userInput?.substring(0, 40) || '新项目';
-  const progress = Math.round(p.progress || 0);
-  const tasks = p.tasks || [];
-
-  const taskList = tasks.slice(0, 3).map((t, i) => {
-    const isDone   = i < (p.currentTaskIndex || 0);
-    const isActive = i === (p.currentTaskIndex || 0) && p.status === 'executing';
-    return `<div class="pc-task ${isDone ? 'task-done' : isActive ? 'task-active' : ''}">
-      <span class="task-icon">${isDone ? '✅' : isActive ? '⚡' : '○'}</span>
-      <span>${t.title}</span>
-    </div>`;
-  }).join('');
-
-  return `
-    <div class="project-card status-${p.status} ${selectedProjectId === p.id ? 'selected' : ''}"
-         onclick="selectProject('${p.id}')">
-      <div class="pc-header">
-        <div class="pc-title">${title}</div>
-        <span class="pc-status-badge badge-${p.status}">${statusIndicatorDot(p.status)} ${statusLabel(p.status)}</span>
-      </div>
-      <div class="progress-wrap">
-        <div class="progress-info">
-          <span>${progressLabel(p.status)} (🔄 第 ${p.iteration || 1}/${p.maxIterations || 3} 轮)</span>
-          <span>${progress}%</span>
-        </div>
-        <div class="progress-bar">
-          <div class="progress-fill fill-${p.status}" style="width:${progress}%"></div>
-        </div>
-      </div>
-      ${tasks.length ? `<div class="pc-tasks">${taskList}</div>` : ''}
-      <div class="pc-footer">
-        <span>${p.mode === 'creative' ? '💡 创意' : '📋 标准'} · 🔄 ${p.iteration || 1}/${p.maxIterations || 3} 轮 · ${timeAgo(p.createdAt)}</span>
-        <button class="btn-review" onclick="openReview('${p.id}',event)">查看详情 →</button>
-      </div>
-    </div>`;
-}
-
-// ── 🔴🟡🟢 三色状态指示灯系统 ────────────────────────────────────────────────
-function statusIndicatorDotPure(status) {
-  if (status === 'error') return `<span class="dot dot-red"></span>`;
-  if (['planning', 'executing', 'waiting_answer'].includes(status)) return `<span class="dot dot-yellow"></span>`;
-  if (status === 'completed') return `<span class="dot dot-green"></span>`;
-  if (status === 'stopped') return `<span class="dot" style="background:#ff6b6b"></span>`;
-  return `<span class="dot" style="background:var(--text-muted)"></span>`;
-}
-
-function statusIndicatorDot(status) {
-  if (status === 'error') return `<span class="dot dot-red" title="🔴 错误"></span>`;
-  if (['planning', 'executing', 'waiting_answer'].includes(status)) return `<span class="dot dot-yellow" title="🟡 思考中"></span>`;
-  if (status === 'completed') return `<span class="dot dot-green" title="🟢 已完成"></span>`;
-  if (status === 'stopped') return `<span class="dot" style="background:#ff6b6b" title="⏹ 已中止"></span>`;
-  return `<span class="dot" style="background:var(--text-muted)"></span>`;
-}
-
-// 判断项目当前是否正在生成（用于控制中止按钮显隐）
-function isProjectGenerating(status) {
-  return ['planning', 'executing', 'waiting_answer'].includes(status);
-}
-
-// ── ⏹ 中止当前项目生成 ────────────────────────────────────────────────────────
-async function stopGeneration() {
-  if (!selectedProjectId) return;
-  try {
-    await fetch(`${API_URL}/api/projects/${selectedProjectId}/stop`, { method: 'POST' });
-    showToast('⏹ 中止信号已发送，模型生成将停止', 'info');
-  } catch (e) {
-    showToast('中止失败：' + e.message, 'error');
-  }
-}
-
-// ── 🔄 重试/恢复当前项目生成 ──────────────────────────────────────────────────
-async function retryProject() {
-  if (!selectedProjectId) return;
-  try {
-    await fetch(`${API_URL}/api/projects/${selectedProjectId}/retry`, { method: 'POST' });
-    showToast('🔄 已发出继续执行指令', 'info');
-  } catch (e) {
-    showToast('重试失败：' + e.message, 'error');
-  }
-}
-
-// ── @ 指令提示菜单 ────────────────────────────────────────────────────────────
-function handleInterveneInput(e) {
-  const val = e.target.value;
-  const atMenu = document.getElementById('atMenu');
-  // 检测到末尾是 @ 符号时弹出菜单
-  if (val.endsWith('@')) {
-    atMenu.style.display = 'block';
-    // 给每个选项绑定点击
-    document.querySelectorAll('.at-item').forEach(item => {
-      item.onclick = () => {
-        const inp = document.getElementById('interveneInput');
-        inp.value = val.slice(0, -1) + item.dataset.value;
-        atMenu.style.display = 'none';
-        inp.focus();
-      };
-    });
-  } else {
-    atMenu.style.display = 'none';
-  }
-}
-
-// 点击其他区域关闭 @ 菜单
-document.addEventListener('click', (e) => {
-  if (!e.target.closest('.intervention-container')) {
-    const m = document.getElementById('atMenu');
-    if (m) m.style.display = 'none';
-  }
-});
-
-function statusLabel(status) {
-  return {
-    idle: '空闲',
-    queued: '排队中',
-    planning: '策略思考规画中',
-    executing: '执行脑生成中',
-    waiting_answer: '协同研判中',
-    completed: '已完成',
-    stopped: '⏹ 已中止',
-    error: '错误 / 等待授权'
-  }[status] || status;
-}
-
-function progressLabel(status) {
-  return {
-    idle: '等待', queued: '排队', planning: '策略脑思考规画中',
-    executing: '执行脑生成中', waiting_answer: '策略脑回答中',
-    completed: '完成', stopped: '已中止', error: '出错 / 等待授权'
-  }[status] || '';
-}
-
-function timeAgo(isoString) {
-  if (!isoString) return '刚刚';
-  const diff = (Date.now() - new Date(isoString)) / 1000;
-  if (diff < 60) return `${Math.round(diff)}秒前`;
-  if (diff < 3600) return `${Math.round(diff / 60)}分钟前`;
-  return `${Math.round(diff / 3600)}小时前`;
-}
-
-// ── 项目选择与对话界面 ──────────────────────────────────────────────────────
-function selectProject(projectId) {
-  selectedProjectId = projectId;
-  const project = projects.get(projectId);
-  if (!project) return;
-
-  const msgArea = document.getElementById('messageArea');
-  msgArea.style.display = 'flex';
-
-  updateSelectedProjectHeader();
-
-  const container = document.getElementById('messagesContainer');
-  container.innerHTML = '';
-  clearStreamOutput();
-
-  (project.messages || []).forEach(msg => appendMessage(msg, false));
-  container.scrollTop = container.scrollHeight;
-
-  renderThoughts(projectId);
-
-  const selectEl = document.getElementById('executorModelSelect');
-  if (selectEl && project.executorConfig?.model) {
-    selectEl.value = project.executorConfig.model;
-  }
-
-  renderAll();
-}
-
-async function adjustMaxIterations(delta) {
-  if (!selectedProjectId) return;
-  const p = projects.get(selectedProjectId);
-  if (!p) return;
-
-  const newMax = Math.max(1, (p.maxIterations || 3) + delta);
-  if (newMax === p.maxIterations) return;
-
-  p.maxIterations = newMax;
-  updateSelectedProjectHeader();
-  renderAll();
-
-  try {
-    const resp = await fetch(`${API_URL}/api/projects/${selectedProjectId}/config`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ maxIterations: newMax })
-    });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-    showToast(`⚙️ 已更新迭代上限为: ${newMax} 轮`, 'success');
-  } catch (e) {
-    showToast(`❌ 更新失败: ${e.message}`, 'error');
-  }
-}
-
-async function changeExecutorModel(model) {
-  if (!selectedProjectId) return;
-  try {
-    const executorConfig = { provider: 'custom_api', model };
-    const resp = await fetch(`${API_URL}/api/projects/${selectedProjectId}/config`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ executorConfig })
-    });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-    showToast(`🟢 执行脑模型已切换为: ${model}`, 'success');
-  } catch (e) {
-    showToast(`❌ 切换失败: ${e.message}`, 'error');
-  }
-}
-
-function updateSelectedProjectHeader() {
-  if (!selectedProjectId) return;
-  const p = projects.get(selectedProjectId);
-  if (!p) return;
-  document.getElementById('selectedProjectTitle').textContent =
-    `📋 ${p.plan?.title || p.userInput?.substring(0, 35) || '项目详情'}`;
-
-  const statusEl = document.getElementById('selectedProjectStatus');
-  if (statusEl) {
-    statusEl.className = `pc-status-badge badge-${p.status}`;
-    statusEl.innerHTML = `${statusIndicatorDot(p.status)} ${statusLabel(p.status)}`;
-  }
-
-  const iterDisplay = document.getElementById('iterationDisplay');
-  if (iterDisplay) {
-    iterDisplay.textContent = `${p.iteration || 1}/${p.maxIterations || 3} 轮`;
-  }
-
-  // 动态显隐中止按钮：仅在项目正在生成时显示
-  const stopBtn = document.getElementById('stopBtn');
-  if (stopBtn) {
-    stopBtn.style.display = isProjectGenerating(p.status) ? 'inline-flex' : 'none';
-  }
-  
-  const retryBtn = document.getElementById('retryBtn');
-  if (retryBtn) {
-    retryBtn.style.display = ['stopped', 'error'].includes(p.status) ? 'inline-flex' : 'none';
-  }
-}
-
-// ── 🧠 实时思考过程流（在折叠面板与聊天框双向跟进展示） ──────────────────────
-function appendThought(projectId, role, token) {
-  if (!thoughtsMap.has(projectId)) {
-    thoughtsMap.set(projectId, '');
-  }
-  const currentText = thoughtsMap.get(projectId) + token;
-  thoughtsMap.set(projectId, currentText);
-
-  // 1. 更新顶部折叠面板
-  if (projectId === selectedProjectId) {
-    const body = document.getElementById('thoughtsBody');
-    const placeholder = document.getElementById('thoughtPlaceholder');
-    if (placeholder) placeholder.remove();
-
-    body.textContent = currentText;
-    body.scrollTop = body.scrollHeight;
-
-    // 2. 直接在聊天框内跟进展示思考过程 (Reasoning Bubble)
-    updateInlineThoughtBubble(role, currentText);
-  }
-}
-
-function updateInlineThoughtBubble(role, text) {
-  const container = document.getElementById('messagesContainer');
-  let bubble = document.getElementById('inlineThoughtBubble');
-
-  if (!bubble) {
-    bubble = document.createElement('div');
-    bubble.id = 'inlineThoughtBubble';
-    bubble.className = 'message-bubble system thought-bubble';
-    container.appendChild(bubble);
-  }
-
-  const roleName = role === 'planner' ? '🔵 策略脑' : '🟢 执行脑';
-  bubble.innerHTML = `
-    <div class="bubble-content thought-content">
-      <div class="thought-bubble-header">
-        <span>🧠 <strong>${roleName} 实时思考推理过程 (Reasoning Stream)...</strong></span>
-      </div>
-      <pre class="thought-text">${escapeHtml(text)}</pre>
-    </div>`;
-
-  container.scrollTop = container.scrollHeight;
-}
-
-function renderThoughts(projectId) {
-  const body = document.getElementById('thoughtsBody');
-  const text = thoughtsMap.get(projectId) || '';
-  if (!text) {
-    body.innerHTML = `<div class="thought-placeholder" id="thoughtPlaceholder">等待策略脑/执行脑生成推理思考...</div>`;
-  } else {
-    body.textContent = text;
-    body.scrollTop = body.scrollHeight;
-  }
-}
-
-function toggleThoughts() {
-  const body = document.getElementById('thoughtsBody');
-  const icon = document.getElementById('thoughtsToggleIcon');
-  thoughtsExpanded = !thoughtsExpanded;
-  if (thoughtsExpanded) {
-    body.style.display = 'block';
-    icon.textContent = '▼';
-  } else {
-    body.style.display = 'none';
-    icon.textContent = '▲';
-  }
-}
-
-// ── ⚙️ 主界面模型与外接 API 设置切换 ───────────────────────────────────────
-function toggleGlobalConfig() {
-  const body = document.getElementById('globalConfigBody');
-  const icon = document.getElementById('configToggleIcon');
-  globalConfigExpanded = !globalConfigExpanded;
-  body.style.display = globalConfigExpanded ? 'flex' : 'none';
-  icon.textContent = globalConfigExpanded ? '▲' : '▼';
-}
-
-function setPlannerProvider(provider) {
-  // 策略脑仅支持外接 API（OpenAI 兼容）
-  plannerProvider = 'custom_api';
-}
-
-function setExecutorProvider(provider) {
-  // 执行脑仅支持外接 API（OpenAI 兼容）
-  executorProvider = 'custom_api';
-}
-
-// ── 消息渲染与流式 Token ────────────────────────────────────────────────────
-function appendMessage(msg, scroll = true) {
-  if (!selectedProjectId) return;
-  const container = document.getElementById('messagesContainer');
-
-  // 若聊天框存在思考流临时 Bubble，移掉以插入正式对话
-  const inlineBubble = document.getElementById('inlineThoughtBubble');
-  if (inlineBubble && msg.role !== 'thought') {
-    inlineBubble.remove();
-  }
-
-  const el = document.createElement('div');
-  el.className = `message-bubble ${msg.role}`;
-
-  const time = new Date(msg.timestamp).toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-
-  if (msg.role === 'system') {
-    el.innerHTML = `<div class="bubble-content system">${escapeHtml(msg.content)}</div>`;
-  } else {
-    let avatar = '🔵';
-    let label = '策略脑';
-
-    if (msg.role === 'executor') {
-      avatar = '🟢'; label = '执行脑';
-    } else if (msg.role === 'user') {
-      avatar = '👤'; label = '用户介入';
-    }
-
-    el.innerHTML = `
-      <div class="bubble-avatar avatar-${msg.role}">${avatar}</div>
-      <div>
-        <div class="bubble-content ${msg.role}">${formatMessage(msg.content)}</div>
-        <div class="bubble-meta">${label} · ${time}</div>
-      </div>`;
-  }
-
-  container.appendChild(el);
-  if (scroll) container.scrollTop = container.scrollHeight;
-}
-
-let streamBufferMap = new Map(); // projectId -> text
-
-function appendProjectStreamToken(projectId, role, token) {
-  const current = (streamBufferMap.get(projectId) || '') + token;
-  streamBufferMap.set(projectId, current);
-
-  if (projectId === selectedProjectId) {
-    const streamOutput = document.getElementById('streamOutput');
-    if (streamOutput) {
-      streamOutput.textContent = current;
-      streamOutput.scrollTop = streamOutput.scrollHeight;
-    }
-    updateInlineStreamBubble(role, current);
-  }
-}
-
-function clearProjectStreamOutput(projectId) {
-  if (projectId) {
-    streamBufferMap.delete(projectId);
-  } else {
-    streamBufferMap.clear();
-  }
-  if (!selectedProjectId || projectId === selectedProjectId) {
-    const streamOutput = document.getElementById('streamOutput');
-    if (streamOutput) streamOutput.textContent = '';
-    const bubble = document.getElementById('inlineStreamBubble');
-    if (bubble) bubble.remove();
-  }
-}
-
-function clearStreamOutput() {
-  clearProjectStreamOutput(selectedProjectId);
-}
-
-function updateInlineStreamBubble(role, text) {
-  const container = document.getElementById('messagesContainer');
-  if (!container) return;
-
-  let bubble = document.getElementById('inlineStreamBubble');
-  if (!bubble) {
-    bubble = document.createElement('div');
-    bubble.id = 'inlineStreamBubble';
-    bubble.className = `message-bubble ${role} streaming-bubble`;
-    container.appendChild(bubble);
-  }
-
-  const roleName = role === 'planner' ? '🔵 策略脑' : '🟢 执行脑';
-  const avatar = role === 'planner' ? '🔵' : '🟢';
-
-  bubble.innerHTML = `
-    <div class="bubble-avatar avatar-${role}">${avatar}</div>
-    <div>
-      <div class="bubble-content ${role}">${formatMessage(text)}<span class="typing-cursor">▌</span></div>
-      <div class="bubble-meta">${roleName} 正在实时打字输出中...</div>
-    </div>`;
-
-  container.scrollTop = container.scrollHeight;
-}
-
-function formatMessage(text) {
-  return escapeHtml(text)
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\n/g, '<br>');
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-// ── ⚡ 实时介入功能 (支持文本与文件附件) ──────────────────────────────────────
-function triggerFileInput() {
-  document.getElementById('interveneFileInput').click();
-}
-
-function handleFileSelect(event) {
-  const files = Array.from(event.target.files || []);
-  if (!files.length) return;
-
-  for (const file of files) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      attachedFiles.push({
-        name: file.name,
-        type: file.type || 'text/plain',
-        content: e.target.result
-      });
-      renderAttachments();
-    };
-    reader.readAsText(file);
-  }
-  event.target.value = '';
-}
-
-function removeAttachment(index) {
-  attachedFiles.splice(index, 1);
-  renderAttachments();
-}
-
-function renderAttachments() {
-  const container = document.getElementById('attachmentPreview');
-  if (!attachedFiles.length) {
-    container.innerHTML = '';
-    return;
-  }
-  container.innerHTML = attachedFiles.map((f, i) => `
-    <div class="attachment-chip" title="${escapeHtml(f.name)}">
-      <span>📎 ${escapeHtml(f.name)}</span>
-      <span class="chip-remove" onclick="removeAttachment(${i})">✕</span>
+      <div class="tool-card-desc">${esc(t.description || '')}</div>
     </div>
   `).join('');
 }
 
-async function sendIntervention() {
-  if (!selectedProjectId) {
-    showToast('请先选择左侧项目', 'error'); return;
+function renderSideTools() {
+  const list = $('sideToolList');
+  if (!list) return;
+  if (!toolDefinitions.length) {
+    list.innerHTML = '<div class="side-tool-empty">暂无工具</div>';
+    return;
   }
-  const inputEl = document.getElementById('interveneInput');
-  const btnEl = document.getElementById('interveneBtn');
-  let text = inputEl.value.trim();
+  const icons = {
+    read_local_file: '📖',
+    write_local_file: '✍️',
+    list_local_directory: '📂',
+    run_local_command: '⚡',
+    web_search: '🌐',
+    search_image_assets: '🎨'
+  };
+  list.innerHTML = toolDefinitions.map((t) => `
+    <div class="side-tool-item" title="${esc(t.description || '')}">
+      <span class="side-tool-ico">${icons[t.name] || '🛠'}</span>
+      <span>${esc(t.name)}</span>
+    </div>
+  `).join('');
+}
 
-  if (!text && attachedFiles.length === 0) {
-    showToast('请输入介入指导内容或选择上传文件', 'error'); return;
-  }
+/* ── 项目创建 ─────────────────────────────────────────────── */
+async function createProject() {
+  const userInput = $('projectInput').value.trim();
+  if (!userInput) { toast('请输入项目想法', 'error'); return; }
 
-  // 解析 @ 路由前缀
-  let targetBrain = 'all'; // 默认同时介入两个脑
-  let toastLabel = '策略脑与执行脑';
-  if (text.startsWith('@策略脑')) {
-    targetBrain = 'planner';
-    toastLabel = '策略脑';
-    text = text.replace(/^@策略脑\s*/, '');
-  } else if (text.startsWith('@执行脑')) {
-    targetBrain = 'executor';
-    toastLabel = '执行脑';
-    text = text.replace(/^@执行脑\s*/, '');
-  } else if (text.startsWith('@全体')) {
-    targetBrain = 'all';
-    toastLabel = '策略脑与执行脑';
-    text = text.replace(/^@全体\s*/, '');
-  }
+  const plannerConfig = readPlannerConfig();
+  const executorConfig = readExecutorConfig();
 
-  // 关闭 @ 菜单
-  const atMenu = document.getElementById('atMenu');
-  if (atMenu) atMenu.style.display = 'none';
-
-  btnEl.disabled = true;
-  btnEl.textContent = '⏳ 发送中...';
+  const payload = {
+    userInput,
+    mode: $('launchModeSelect').value,
+    plannerConfig,
+    executorConfig,
+    maxIterations: Number($('launchIterInput').value) || 3,
+    selectedSkill: $('launchSkillSelect').value || 'bili_toy',
+    workDir: $('workDirInput').value.trim()
+  };
 
   try {
-    const resp = await fetch(`${API_URL}/api/projects/${selectedProjectId}/intervene`, {
+    const r = await fetch('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userInstruction: text,
-        files: attachedFiles,
-        targetBrain  // 传递路由目标，后端可扩展使用
-      })
+      body: JSON.stringify(payload)
     });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-
-    if (data.project) {
-      projects.set(selectedProjectId, data.project);
-      selectProject(selectedProjectId);
+    if (!r.ok) {
+      const err = await r.json();
+      throw new Error(err.error || '创建失败');
     }
-
-    showToast(`⚡ 介入指令已发送给 ${toastLabel}！`, 'success');
-    inputEl.value = '';
-    attachedFiles = [];
-    renderAttachments();
+    const res = await r.json();
+    $('projectInput').value = '';
+    toast(`项目已启动：${res.projectId.substring(0, 8)}…`);
+    switchView('projects');
+    // 等待 WS 推送 project_created
   } catch (e) {
-    showToast(`❌ 介入失败: ${e.message}`, 'error');
-  } finally {
-    btnEl.disabled = false;
-    btnEl.textContent = '⚡ 发送介入';
+    toast(e.message, 'error');
   }
 }
 
-function handleInterveneKey(e) {
-  if (e.key === 'Enter') {
+function readPlannerConfig() {
+  return {
+    provider: 'custom_api',
+    apiKey: $('plannerApiKey').value.trim() || undefined,
+    baseUrl: $('plannerBaseUrl').value.trim() || undefined,
+    model: $('plannerCustomModel').value.trim() || undefined,
+    webSearch: $('plannerWebSearchToggle').checked
+  };
+}
+
+function readExecutorConfig() {
+  return {
+    provider: 'custom_api',
+    apiKey: $('executorApiKey').value.trim() || undefined,
+    baseUrl: $('executorBaseUrl').value.trim() || undefined,
+    model: $('executorCustomModel').value.trim() || undefined,
+    webSearch: $('executorWebSearchToggle').checked
+  };
+}
+
+function saveSettings() {
+  toast('配置已保存到本地（新建项目时生效）');
+}
+
+/* ── 技能 ─────────────────────────────────────────────────── */
+function renderSkillSelector() {
+  const sel = $('launchSkillSelect');
+  const holder = $('skillSelector');
+  const launchWrap = $('launchSkillWrap');
+
+  if (sel) {
+    sel.innerHTML = skills.map((s) => `<option value="${esc(s.id)}">${esc(s.icon || '⚪')} ${esc(s.name)}</option>`).join('');
+    const name = $('selectedSkillName');
+    if (name && skills.length) name.textContent = skills.find((s) => s.id === sel.value)?.name || '未知技能';
+  }
+
+  if (holder) {
+    holder.innerHTML = skills.map((s) => `
+      <div class="skill-item ${s.id === 'bili_toy' ? 'active' : ''}" data-skill="${esc(s.id)}" onclick="selectSkill('${esc(s.id)}')">
+        <span class="skill-ico">${esc(s.icon || '⚪')}</span>
+        <div>
+          <div class="skill-name">${esc(s.name)}</div>
+          <div class="skill-desc">${esc(s.description || '')}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  if (launchWrap) {
+    const s = $('launchSkillSelect');
+    if (s) {
+      const current = s.value;
+      s.innerHTML = skills.map((sk) => `<option value="${esc(sk.id)}">${esc(sk.icon || '⚪')} ${esc(sk.name)}</option>`).join('');
+      if (current) s.value = current;
+    }
+  }
+}
+
+function selectSkill(id) {
+  const items = document.querySelectorAll('.skill-item');
+  items.forEach((i) => i.classList.toggle('active', i.dataset.skill === id));
+  const sel = $('launchSkillSelect');
+  if (sel) sel.value = id;
+  const name = $('selectedSkillName');
+  const sk = skills.find((s) => s.id === id);
+  if (name && sk) name.textContent = sk.name;
+  toast(`已选择技能：${sk?.name || id}`);
+}
+
+/* ── 项目列表渲染 ─────────────────────────────────────────── */
+function renderProjectList() {
+  const list = $('projectList');
+  const recent = $('recentProjects');
+  const all = Array.from(projects.values()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+  if (!list) return;
+
+  if (!all.length) {
+    list.innerHTML = '<div class="empty-state">暂无项目</div>';
+  } else {
+    list.innerHTML = all.map((p) => `
+      <div class="project-card ${p.id === selectedProjectId ? 'active' : ''}" onclick="selectProject('${p.id}')">
+        <div class="pc-title">${esc(firstLine(p.userInput) || p.id || '未命名')}</div>
+        <div class="pc-meta">
+          <span class="pc-status" data-status="${esc(p.status || 'idle')}">${statusLabel(p.status)}</span>
+          <span>${p.progress || 0}%</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  if (recent) {
+    const recentAll = all.slice(0, 5);
+    recent.innerHTML = recentAll.length
+      ? recentAll.map((p) => `
+          <div class="project-card" onclick="selectProject('${p.id}')">
+            <div class="pc-title">${esc(firstLine(p.userInput) || p.id)}</div>
+            <div class="pc-meta">
+              <span class="pc-status" data-status="${esc(p.status || 'idle')}">${statusLabel(p.status)}</span>
+              <span>${p.progress || 0}%</span>
+            </div>
+          </div>
+        `).join('')
+      : '<div class="empty-state">暂无项目，在上方输入想法并启动编排吧。</div>';
+  }
+
+  renderStats();
+}
+
+function firstLine(str) {
+  return String(str || '').split('\n')[0];
+}
+
+function statusLabel(status) {
+  const map = {
+    idle: '待命', planning: '策略脑规划中', executing: '执行脑执行中',
+    waiting_answer: '等待回答', completed: '已完成', stopped: '已中止',
+    error: '错误', queued: '排队中'
+  };
+  return map[status] || status || '—';
+}
+
+function renderStats() {
+  const all = Array.from(projects.values());
+  $('statTotal').textContent = all.length;
+  $('statActive').textContent = all.filter((p) => ['planning', 'executing', 'waiting_answer', 'queued'].includes(p.status)).length;
+  $('statDone').textContent = all.filter((p) => p.status === 'completed').length;
+  $('activeCount').textContent = $('statActive').textContent;
+  $('projectCount').textContent = all.length;
+}
+
+/* ── 选中项目 ─────────────────────────────────────────────── */
+async function selectProject(projectId) {
+  selectedProjectId = projectId;
+  $('noSelection').style.display = 'none';
+  $('messageArea').style.display = 'flex';
+  renderProjectList();
+  renderSelectedProject();
+
+  // 加载最新项目详情（若 WS 快照滞后）
+  try {
+    const r = await fetch(`/api/projects/${projectId}`);
+    const p = await r.json();
+    projects.set(projectId, { ...projects.get(projectId), ...p });
+    renderSelectedProject();
+  } catch {}
+}
+
+function renderSelectedProject() {
+  const p = projects.get(selectedProjectId);
+  if (!p) return;
+
+  $('selectedProjectTitle').textContent = firstLine(p.userInput) || '未命名项目';
+  const statusEl = $('selectedProjectStatus');
+  statusEl.textContent = statusLabel(p.status);
+  statusEl.dataset.status = p.status || 'idle';
+  $('iterationDisplay').textContent = `第 ${p.iteration || 1} / ${p.maxIterations || 3} 轮`;
+  $('selectedProjectSkill').textContent = p.selectedSkill || '—';
+  $('projWorkDirInput').value = p.workDir || '';
+
+  // 进度条
+  const prog = Math.min(100, Math.max(0, p.progress || 0));
+  $('projectProgressBar').style.width = prog + '%';
+  $('projectProgressText').textContent = prog + '%';
+
+  // 双脑状态卡
+  updateBrainStatus(p.status);
+
+  // 中止/重试按钮
+  $('stopBtn').style.display = ['planning', 'executing', 'waiting_answer'].includes(p.status) ? 'inline-block' : 'none';
+  $('retryBtn').style.display = ['stopped', 'error'].includes(p.status) ? 'inline-block' : 'none';
+
+  // 消息
+  renderMessages(p.messages || []);
+  renderThoughts(Array.from({ length: 0 })); // 思考流由 WS 实时追加
+  renderFiles();
+  renderToolCalls();
+}
+
+function updateBrainStatus(status) {
+  const planner = $('plannerStatus');
+  const executor = $('executorStatus');
+  if (!planner || !executor) return;
+
+  switch (status) {
+    case 'planning':
+      planner.textContent = '🟢 规划中';
+      executor.textContent = '⏳ 待命';
+      break;
+    case 'executing':
+      planner.textContent = '⏳ 待命';
+      executor.textContent = '🟢 执行中';
+      break;
+    case 'waiting_answer':
+      planner.textContent = '⏳ 回答中';
+      executor.textContent = '❓ 询问中';
+      break;
+    case 'completed':
+      planner.textContent = '✅ 已终审';
+      executor.textContent = '✅ 已完成';
+      break;
+    case 'stopped':
+      planner.textContent = '⏹ 已中止';
+      executor.textContent = '⏹ 已中止';
+      break;
+    case 'error':
+      planner.textContent = '⚠️ 异常';
+      executor.textContent = '⚠️ 异常';
+      break;
+    default:
+      planner.textContent = '待命';
+      executor.textContent = '待命';
+  }
+}
+
+function updateProjectStatus(projectId) {
+  if (selectedProjectId === projectId) {
+    const p = projects.get(projectId);
+    if (p) renderSelectedProject();
+  }
+}
+
+/* ── 消息渲染 ─────────────────────────────────────────────── */
+let thoughtsElCache = null;
+
+function renderMessages(messages) {
+  const box = $('messagesContainer');
+  if (!box) return;
+  box.innerHTML = messages.map((m) => `
+    <div class="msg ${esc(m.role || 'system')}">
+      ${renderMarkdown(m.content)}
+      <div style="font-size:10px;color:var(--text-2);margin-top:6px">${new Date(m.timestamp).toLocaleTimeString()}</div>
+    </div>
+  `).join('');
+  box.scrollTop = box.scrollHeight;
+}
+
+function appendMessage(msg) {
+  const box = $('messagesContainer');
+  if (!box) return;
+  const el = document.createElement('div');
+  el.className = `msg ${esc(msg.role || 'system')}`;
+  el.innerHTML = renderMarkdown(msg.content) +
+    `<div style="font-size:10px;color:var(--text-2);margin-top:6px">${new Date(msg.timestamp).toLocaleTimeString()}</div>`;
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+}
+
+function renderMarkdown(text) {
+  if (!text) return '';
+  let t = esc(text);
+  // 简单 markdown：粗体 / 行内代码 / 代码块
+  t = t.replace(/```([\s\S]*?)```/g, '<pre>$1</pre>');
+  t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+  t = t.replace(/\n/g, '<br/>');
+  return t;
+}
+
+/* ── 思考流 ───────────────────────────────────────────────── */
+function toggleThoughts() {
+  const body = $('thoughtsBody');
+  const icon = $('thoughtsToggleIcon');
+  if (!body) return;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'flex';
+  icon.textContent = isOpen ? '›' : '⌄';
+}
+
+function renderThoughts() {
+  const body = $('thoughtsBody');
+  if (!body) return;
+  body.innerHTML = '<div class="proc-empty" id="thoughtPlaceholder">等待双脑输出推理过程…</div>';
+}
+
+function appendThought(role, token) {
+  const body = $('thoughtsBody');
+  const placeholder = $('thoughtPlaceholder');
+  if (!body) return;
+  if (placeholder) placeholder.remove();
+  if (body.style.display === 'none') body.style.display = 'flex';
+
+  let last = body.lastElementChild;
+  if (last && last.classList.contains('thought-line') && last.dataset.role === role) {
+    last.textContent += token;
+  } else {
+    const el = document.createElement('div');
+    el.className = `thought-line ${esc(role)}`;
+    el.dataset.role = role;
+    el.textContent = token;
+    body.appendChild(el);
+  }
+  body.scrollTop = body.scrollHeight;
+}
+
+/* ── 流式输出 ─────────────────────────────────────────────── */
+function appendStreamToken(token) {
+  const box = $('streamOutput');
+  if (!box) return;
+  box.textContent += token;
+  box.scrollTop = box.scrollHeight;
+}
+
+/* ── 文件树 ───────────────────────────────────────────────── */
+async function toggleFilesPanel() {
+  const panel = $('filesPanel');
+  if (!panel) return;
+  const hidden = panel.style.display === 'none';
+  panel.style.display = hidden ? 'block' : 'none';
+  if (hidden && selectedProjectId) {
+    try {
+      const r = await fetch(`/api/projects/${selectedProjectId}/files`);
+      const data = await r.json();
+      const files = data.files || [];
+      const list = $('filesList');
+      if (!files.length) {
+        list.innerHTML = '<div class="empty-state">暂无文件</div>';
+        return;
+      }
+      list.innerHTML = files.map((f) => `
+        <div class="file-item">
+          <span class="f-ico">📄</span>
+          <span class="f-name">${esc(f.path)}</span>
+          <span class="f-size">${(f.content || '').length} 字符</span>
+        </div>
+      `).join('');
+    } catch {}
+  }
+}
+
+function renderFiles() {
+  const list = $('filesList');
+  if (!list || list.parentElement.style.display === 'none') return;
+  const p = projects.get(selectedProjectId);
+  const actions = p?.fileActions || [];
+  if (!actions.length) {
+    list.innerHTML = '<div class="empty-state">暂无文件，Agent 实时写入后将出现在这里。</div>';
+    return;
+  }
+  list.innerHTML = actions.slice(-30).reverse().map((a) => `
+    <div class="file-item">
+      <span class="f-ico">📄</span>
+      <span class="f-name">${esc(a.path)}</span>
+      <span class="f-size">${a.size || 0} B</span>
+    </div>
+  `).join('');
+}
+
+/* ── 工具调用记录 ─────────────────────────────────────────── */
+function toggleToolsPanel() {
+  const panel = $('toolsPanel');
+  if (!panel) return;
+  const hidden = panel.style.display === 'none';
+  panel.style.display = hidden ? 'block' : 'none';
+  if (hidden) renderToolCalls();
+}
+
+function renderToolCalls() {
+  const list = $('toolsList');
+  const badge = $('toolCountBadge');
+  if (!list) return;
+  const p = projects.get(selectedProjectId);
+  const calls = p?.toolCalls || [];
+  if (badge) badge.textContent = calls.length;
+
+  if (!calls.length) {
+    list.innerHTML = '<div class="empty-state">暂无工具调用，双脑调用本地工具时将实时展示。</div>';
+    return;
+  }
+
+  list.innerHTML = calls.slice(-40).reverse().map((c) => `
+    <div class="tool-item">
+      <div class="t-head">
+        <span class="tool-brain ${esc(c.brain === 'planner' ? 'planner' : 'executor')}">${c.brain === 'planner' ? '策略脑' : '执行脑'}</span>
+        <span class="tool-name">${esc(c.tool)}</span>
+      </div>
+      <div class="tool-args">${esc(JSON.stringify(c.args || {}).slice(0, 120))}</div>
+    </div>
+  `).join('');
+}
+
+/* ── 介入逻辑 ─────────────────────────────────────────────── */
+let atMenuOpen = false;
+
+function triggerFileInput() { $('interveneFileInput').click(); }
+
+function handleFileSelect(event) {
+  const files = Array.from(event.target.files || []);
+  const preview = $('attachmentPreview');
+  files.forEach((f) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      pendingFiles.push({
+        name: f.name,
+        size: f.size,
+        content: String(e.target.result).slice(0, 10 * 1024 * 1024) // 10MB 上限
+      });
+      const chip = document.createElement('span');
+      chip.className = 'attach-item';
+      chip.textContent = `📎 ${f.name}`;
+      preview.appendChild(chip);
+    };
+    reader.readAsText(f);
+  });
+}
+
+function handleInterveneInput(event) {
+  const val = event.target.value;
+  const menu = $('atMenu');
+  if (val.endsWith('@') && !atMenuOpen) {
+    menu.style.display = 'block';
+    atMenuOpen = true;
+  } else if (!val.endsWith('@')) {
+    menu.style.display = 'none';
+    atMenuOpen = false;
+  }
+}
+
+function handleInterveneKey(event) {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
     sendIntervention();
   }
-  if (e.key === 'Escape') {
-    const atMenu = document.getElementById('atMenu');
-    if (atMenu) atMenu.style.display = 'none';
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.at-menu') && !e.target.closest('#interveneInput')) {
+    const menu = $('atMenu');
+    if (menu) { menu.style.display = 'none'; atMenuOpen = false; }
   }
-}
+});
 
-// ── 外接 API 配置辅助 ───────────────────────────────────────────────────
-function getPlannerConfig() {
-  return {
-    provider: 'custom_api',
-    model: document.getElementById('plannerCustomModel').value.trim() || 'deepseek-chat',
-    apiKey: document.getElementById('plannerApiKey').value.trim(),
-    baseUrl: document.getElementById('plannerBaseUrl').value.trim(),
-    webSearch: document.getElementById('plannerWebSearchToggle').checked
-  };
-}
+document.querySelectorAll('.at-item').forEach((item) => {
+  item.addEventListener('click', () => {
+    const input = $('interveneInput');
+    if (input) {
+      input.value = input.value.replace(/@$/, '') + item.dataset.value;
+      const menu = $('atMenu');
+      if (menu) { menu.style.display = 'none'; atMenuOpen = false; }
+      input.focus();
+    }
+  });
+});
 
-function getExecutorConfig() {
-  return {
-    provider: 'custom_api',
-    model: document.getElementById('executorCustomModel').value.trim() || 'Qwen/Qwen2.5-7B-Instruct',
-    apiKey: document.getElementById('executorApiKey').value.trim(),
-    baseUrl: document.getElementById('executorBaseUrl').value.trim(),
-    webSearch: document.getElementById('executorWebSearchToggle').checked
-  };
-}
-
-
-// ── 创建项目 ────────────────────────────────────────────────────────────────
-async function createProject() {
-  const input = document.getElementById('projectInput').value.trim();
-  const btn = document.getElementById('createProjectBtn');
-  const maxIterations = parseInt(document.getElementById('maxIterationsInput')?.value || '3', 10);
-
-  if (projects.size >= 6) {
-    showToast('⚠️ 项目数量已达上限', 'error'); return;
-  }
-
-  btn.disabled = true;
-  btn.innerHTML = '<span class="btn-icon">⏳</span> 启动中...';
-
-  const plannerConfig = {
-    provider: 'custom_api',
-    model: document.getElementById('plannerCustomModel').value.trim() || 'deepseek-chat',
-    apiKey: document.getElementById('plannerApiKey').value.trim(),
-    baseUrl: document.getElementById('plannerBaseUrl').value.trim(),
-    webSearch: document.getElementById('plannerWebSearchToggle').checked
-  };
-
-  const executorConfig = {
-    provider: 'custom_api',
-    model: document.getElementById('executorCustomModel').value.trim() || 'Qwen/Qwen2.5-7B-Instruct',
-    apiKey: document.getElementById('executorApiKey').value.trim(),
-    baseUrl: document.getElementById('executorBaseUrl').value.trim(),
-    webSearch: document.getElementById('executorWebSearchToggle').checked
-  };
+async function sendIntervention() {
+  if (!selectedProjectId) { toast('请先选择项目', 'error'); return; }
+  const input = $('interveneInput');
+  const text = input.value.trim();
+  if (!text && !pendingFiles.length) { toast('请输入介入要求或选择文件', 'error'); return; }
 
   try {
-    const resp = await fetch(`${API_URL}/api/projects`, {
+    const r = await fetch(`/api/projects/${selectedProjectId}/intervene`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userInput: input || '帮我想一个有趣的项目',
-        mode: currentMode,
-        plannerConfig,
-        executorConfig,
-        maxIterations,
-        selectedSkill // 🎯 传递当前选中的项目技能 (默认 bili_toy)
-      })
+      body: JSON.stringify({ userInstruction: text, files: pendingFiles })
     });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-
-    // 立即建立项目实体并实时选中刷新
-    const newProject = {
-      id: data.projectId,
-      userInput: input || '帮我想一个有趣的项目',
-      mode: currentMode,
-      status: 'planning',
-      progress: 0,
-      iteration: 1,
-      maxIterations: maxIterations,
-      plannerConfig,
-      executorConfig,
-      messages: [],
-      createdAt: new Date().toISOString()
-    };
-    projects.set(data.projectId, newProject);
-
-    showToast('🚀 项目已使用选定模型启动！', 'success');
-    document.getElementById('projectInput').value = '';
-    selectProject(data.projectId);
-    renderAll();
+    if (!r.ok) {
+      const err = await r.json();
+      throw new Error(err.error || '介入失败');
+    }
+    toast('介入指令已发送');
+    input.value = '';
+    pendingFiles = [];
+    $('attachmentPreview').innerHTML = '';
   } catch (e) {
-    showToast(`❌ ${e.message}`, 'error');
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<span class="btn-icon">🚀</span> 启动项目';
+    toast(e.message, 'error');
   }
 }
 
-async function deleteProject(projectId, event) {
-  if (event) event.stopPropagation();
-  if (!confirm('确定删除该项目及其构建数据吗？')) return;
-
+/* ── 中止 / 重试 ──────────────────────────────────────────── */
+async function stopGeneration() {
+  if (!selectedProjectId) return;
   try {
-    const res = await fetch(`${API_URL}/api/projects/${projectId}`, { method: 'DELETE' });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || '删除失败');
-    }
-    projects.delete(projectId);
-    thoughtsMap.delete(projectId);
-    clearProjectStreamOutput(projectId);
-
-    if (selectedProjectId === projectId) {
-      selectedProjectId = null;
-      document.getElementById('messageArea').style.display = 'none';
-    }
-
-    showToast('🗑️ 项目已删除', 'info');
-    renderAll();
+    await fetch(`/api/projects/${selectedProjectId}/stop`, { method: 'POST' });
+    toast('已发送中止指令');
   } catch (e) {
-    showToast(`删除失败: ${e.message}`, 'error');
+    toast(e.message, 'error');
   }
 }
 
+async function retryProject() {
+  if (!selectedProjectId) return;
+  try {
+    await fetch(`/api/projects/${selectedProjectId}/retry`, { method: 'POST' });
+    toast('已发送重试指令');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
 
-// ── 审查台 ──────────────────────────────────────────────────────────────────
-function openReview(projectId, event) {
-  if (event) event.stopPropagation();
-  const pId = projectId || selectedProjectId;
-  currentReviewProject = projects.get(pId);
-  if (!currentReviewProject) return;
+/* ── 工作目录 ─────────────────────────────────────────────── */
+async function setProjectWorkDir() {
+  if (!selectedProjectId) return;
+  const workDir = $('projWorkDirInput').value.trim();
+  try {
+    await fetch(`/api/projects/${selectedProjectId}/workdir`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workDir })
+    });
+    toast('工作目录已设置');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+/* ── 审查台 ───────────────────────────────────────────────── */
+let reviewTab = 'result';
+
+function openReview(projectId) {
+  const panel = $('reviewPanel');
+  if (!projectId) return;
+  selectedProjectId = projectId;
+  panel.classList.add('open');
   switchTab('result');
-  document.getElementById('reviewPanel').classList.add('open');
 }
 
 function closeReview() {
-  document.getElementById('reviewPanel').classList.remove('open');
+  $('reviewPanel').classList.remove('open');
 }
 
 function switchTab(tab) {
-  currentTab = tab;
-  document.querySelectorAll('.tab-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.tab === tab);
-  });
+  reviewTab = tab;
+  document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
 
-  const content = document.getElementById('reviewContent');
-  const p = currentReviewProject;
+  const p = projects.get(selectedProjectId);
   if (!p) return;
-
+  const content = $('reviewContent');
   if (tab === 'result') {
-    const raw = p.result || '项目尚未完成';
-    const htmlMatch = raw.match(/(<!DOCTYPE html>[\s\S]*<\/html>)/i) || raw.match(/```html([\s\S]*?)```/i);
-    if (htmlMatch) {
-      const code = htmlMatch[1] || htmlMatch[0];
-      const blob = new Blob([code], { type: 'text/html; charset=utf-8' });
-      const blobUrl = URL.createObjectURL(blob);
-      content.innerHTML = `
-        <div style="display:flex; flex-direction:column; gap:12px; height:100%;">
-          <div style="display:flex; align-items:center; justify-content:space-between; background:rgba(0,212,170,0.08); padding:8px 12px; border-radius:6px; border:1px solid rgba(0,212,170,0.25);">
-            <span style="font-weight:600; color:var(--accent-green); font-size:0.85rem;">🌐 HTML5 网页构建产物 - 实时交互预览视窗</span>
-            <a href="${blobUrl}" target="_blank" class="btn-review" style="text-decoration:none;">在新标签页独立全屏运行 ↗</a>
-          </div>
-          <iframe src="${blobUrl}" style="width:100%; height:420px; border:1px solid var(--glass-border); border-radius:8px; background:#ffffff;"></iframe>
-          <details style="background:rgba(255,255,255,0.02); padding:10px; border-radius:6px; border:1px solid var(--glass-border);">
-            <summary style="cursor:pointer; color:var(--accent-blue); font-size:0.8rem; font-weight:600;">📄 点击展开 / 隐藏 HTML5 源代码</summary>
-            <pre style="margin-top:10px; max-height:250px; overflow-y:auto; font-size:0.75rem; color:var(--text-primary);">${escapeHtml(code)}</pre>
-          </details>
-        </div>`;
-    } else {
-      content.textContent = raw;
-    }
+    content.innerHTML = `<pre>${esc(p.result || '暂无成果')}</pre>`;
   } else if (tab === 'plan') {
-    content.textContent = p.plan ? JSON.stringify(p.plan, null, 2) : '暂无计划';
+    content.innerHTML = `
+      <h3>${esc(p.plan?.title || '项目计划')}</h3>
+      <p>${esc(p.plan?.summary || '')}</p>
+      ${(p.tasks || []).map((t, i) => `
+        <div style="margin:12px 0;padding:12px;background:rgba(0,0,0,.2);border-radius:10px;border:1px solid var(--glass-border)">
+          <strong>任务 ${t.id}: ${esc(t.title)}</strong>
+          <div style="color:var(--text-1);font-size:12px;margin-top:6px">${esc(t.description || '')}</div>
+        </div>
+      `).join('')}
+    `;
   } else if (tab === 'log') {
-    content.textContent = (p.messages || []).map(m =>
-      `[${new Date(m.timestamp).toLocaleTimeString()}] [${m.role.toUpperCase()}]\n${m.content}\n`
-    ).join('\n---\n\n');
+    content.innerHTML = (p.messages || []).map((m) => `
+      <div style="margin:6px 0;color:${m.role === 'planner' ? 'var(--accent-blue)' : m.role === 'executor' ? 'var(--accent-green)' : 'var(--text-1)'}">
+        <b>[${m.role}]</b> ${esc(m.content).slice(0, 300)}
+      </div>
+    `).join('');
   }
 }
 
 function copyToClipboard() {
-  const text = document.getElementById('reviewContent').textContent;
-  navigator.clipboard.writeText(text).then(() => showToast('📋 已复制到剪贴板', 'success'));
+  const p = projects.get(selectedProjectId);
+  if (!p || !p.result) return;
+  navigator.clipboard.writeText(p.result).then(() => toast('已复制到剪贴板'));
 }
 
 function previewInNewWindow() {
-  const p = currentReviewProject;
+  const p = projects.get(selectedProjectId);
   if (!p) return;
-  const raw = p.result || '';
-  const htmlMatch = raw.match(/(<!DOCTYPE html>[\s\S]*<\/html>)/i) || raw.match(/```html([\s\S]*?)```/i);
-  if (!htmlMatch) { showToast('当前项目没有可预览的 HTML 成果', 'error'); return; }
-  const code = htmlMatch[1] || htmlMatch[0];
-  const blob = new Blob([code], { type: 'text/html; charset=utf-8' });
-  const blobUrl = URL.createObjectURL(blob);
-  window.open(blobUrl, '_blank');
-}
-
-function clearMessages() {
-  document.getElementById('messagesContainer').innerHTML = '';
-  clearStreamOutput();
+  const html = p.result || '';
+  if (!html) { toast('暂无成果可预览', 'error'); return; }
+  const win = window.open('', '_blank');
+  if (!win) { toast('浏览器阻止了弹窗，请允许', 'error'); return; }
+  win.document.write(html);
+  win.document.close();
 }
 
 function exportResult() {
   const p = projects.get(selectedProjectId);
-  if (!p?.result) { showToast('暂无结果', 'error'); return; }
-
-  const raw = p.result;
-  const title = (p.plan?.title || 'project').replace(/[\\/:*?"<>|]/g, '_');
-
-  // 1. 动态匹配代码块语言类型或 HTML 网页
-  const htmlMatch = raw.match(/(<!DOCTYPE html>[\s\S]*<\/html>)/i);
-  const codeBlockMatch = raw.match(/```([a-zA-Z0-9_-]+)?\s*([\s\S]*?)```/);
-
-  let content = raw;
-  let ext = 'md';
-  let mimeType = 'text/markdown; charset=utf-8';
-
-  if (htmlMatch) {
-    content = htmlMatch[1].trim();
-    ext = 'html';
-    mimeType = 'text/html; charset=utf-8';
-  } else if (codeBlockMatch) {
-    const lang = (codeBlockMatch[1] || '').toLowerCase();
-    const code = codeBlockMatch[2].trim();
-
-    if (['html', 'htm'].includes(lang)) {
-      content = code;
-      ext = 'html';
-      mimeType = 'text/html; charset=utf-8';
-    } else if (['json'].includes(lang)) {
-      content = code;
-      ext = 'json';
-      mimeType = 'application/json; charset=utf-8';
-    } else if (['py', 'python'].includes(lang)) {
-      content = code;
-      ext = 'py';
-      mimeType = 'text/x-python; charset=utf-8';
-    } else if (['svg'].includes(lang)) {
-      content = code;
-      ext = 'svg';
-      mimeType = 'image/svg+xml; charset=utf-8';
-    } else if (['csv'].includes(lang)) {
-      content = code;
-      ext = 'csv';
-      mimeType = 'text/csv; charset=utf-8';
-    } else if (['xml'].includes(lang)) {
-      content = code;
-      ext = 'xml';
-      mimeType = 'application/xml; charset=utf-8';
-    } else if (['js', 'javascript'].includes(lang)) {
-      content = code;
-      ext = 'js';
-      mimeType = 'application/javascript; charset=utf-8';
-    } else if (['css'].includes(lang)) {
-      content = code;
-      ext = 'css';
-      mimeType = 'text/css; charset=utf-8';
-    } else if (['sql'].includes(lang)) {
-      content = code;
-      ext = 'sql';
-      mimeType = 'text/plain; charset=utf-8';
-    } else if (lang) {
-      content = code;
-      ext = lang;
-      mimeType = 'text/plain; charset=utf-8';
-    }
-  }
-
-  const blob = new Blob([content], { type: mimeType });
+  if (!p || !p.result) { toast('暂无成果可导出', 'error'); return; }
+  const blob = new Blob([p.result], { type: 'text/plain;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `${title}.${ext}`;
+  a.download = `${firstLine(p.userInput) || 'project'}-result.txt`;
   a.click();
-  showToast(`📁 已按设计格式导出产物: ${title}.${ext}`, 'success');
+  URL.revokeObjectURL(a.href);
+  toast('已导出成果文件');
 }
 
-// ── 健康与状态灯 ─────────────────────────────────────────────────────────────
-function updateHealth(online) {
-  const el = document.getElementById('healthIndicator');
-  let hasProcessing = false;
-  let hasError = false;
+/* ── 技能工坊 ─────────────────────────────────────────────── */
+function toggleAlchemyPanel() {
+  const body = $('alchemyBody');
+  const arrow = $('alchemyArrow');
+  if (!body) return;
+  const hidden = body.style.display === 'none';
+  body.style.display = hidden ? 'flex' : 'none';
+  arrow.textContent = hidden ? '⌃' : '⌄';
+}
 
-  for (const p of projects.values()) {
-    if (['planning','executing','waiting_answer'].includes(p.status)) hasProcessing = true;
-    if (p.status === 'error') hasError = true;
-  }
+async function runSkillAlchemy() {
+  const urls = $('alchemyUrls').value.trim().split('\n').map((s) => s.trim()).filter(Boolean);
+  if (!urls.length) { toast('请输入至少一个信源 URL', 'error'); return; }
 
-  if (!online || hasError) {
-    el.innerHTML = `<span class="dot dot-red"></span><span>${online ? '🔴 异常 / 等待授权' : '🔴 断开连接'}</span>`;
-  } else if (hasProcessing) {
-    el.innerHTML = `<span class="dot dot-yellow"></span><span>🟡 正在思考与协同中...</span>`;
-  } else {
-    el.innerHTML = `<span class="dot dot-green"></span><span>🟢 系统就绪</span>`;
+  const box = $('alchemyStatusBox');
+  const stream = $('alchemyStreamOutput');
+  box.style.display = 'block';
+  stream.textContent = '';
+
+  $('alchemyStageIndicator').innerHTML = '<span class="spinner"></span> 正在抓取信源并提炼…';
+
+  try {
+    const resp = await fetch('/api/skill-alchemy/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        urls,
+        customPrompt: $('alchemyInstruction').value.trim(),
+        plannerConfig: readPlannerConfig()
+      })
+    });
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split('\n\n');
+      buffer = events.pop();
+      for (const ev of events) {
+        const line = ev.replace(/^data: /, '').trim();
+        if (!line) continue;
+        try {
+          const data = JSON.parse(line);
+          if (data.type === 'token') {
+            stream.textContent += data.token;
+            stream.scrollTop = stream.scrollHeight;
+          } else if (data.type === 'progress') {
+            $('alchemyStageIndicator').innerHTML = `<span class="spinner"></span> ${esc(data.message || '处理中…')}`;
+          } else if (data.type === 'complete') {
+            $('alchemyStageIndicator').innerHTML = '✅ 技能已生成！';
+            localStorage.setItem('skillAlchemyResult', JSON.stringify(data.skill));
+            toast('技能已成功炼化');
+          } else if (data.type === 'error') {
+            $('alchemyStageIndicator').innerHTML = `❌ ${esc(data.message || '错误')}`;
+            toast(data.message || '炼化失败', 'error');
+          }
+        } catch {}
+      }
+    }
+  } catch (e) {
+    $('alchemyStageIndicator').innerHTML = `❌ ${esc(e.message)}`;
   }
 }
 
-// ── Toast ───────────────────────────────────────────────────────────────────
-function showToast(message, type = 'info') {
-  const container = document.getElementById('toastContainer');
+/* ── 活动流 ───────────────────────────────────────────────── */
+function addActivity(text) {
+  const feed = $('activityFeed');
+  if (!feed) return;
+  const empty = feed.querySelector('.empty-state');
+  if (empty) empty.remove();
   const el = document.createElement('div');
-  el.className = `toast ${type}`;
-  el.textContent = message;
-  container.appendChild(el);
-  setTimeout(() => el.remove(), 4000);
+  el.className = 'file-item';
+  el.style.margin = '4px 0';
+  el.textContent = `· ${text} — ${new Date().toLocaleTimeString()}`;
+  feed.prepend(el);
+  if (feed.children.length > 30) feed.lastElementChild.remove();
 }
 
-// ── 启动 ─────────────────────────────────────────────────────────────────────
-connectWS();
-
-// ── Electron 桌面版窗口控制 ──────────────────────────────────
-if (window.electronAPI && window.electronAPI.isElectron) {
-  const winControls = document.getElementById('winControls');
-  if (winControls) winControls.style.display = 'flex';
-  const minBtn = document.getElementById('winMin');
-  const maxBtn = document.getElementById('winMax');
-  const closeBtn = document.getElementById('winClose');
-  if (minBtn) minBtn.onclick = () => window.electronAPI.minimize();
-  if (maxBtn) maxBtn.onclick = () => window.electronAPI.toggleMaximize();
-  if (closeBtn) closeBtn.onclick = () => window.electronAPI.close();
+/* ── Electron 窗口控制 ────────────────────────────────────── */
+function initWinControls() {
+  const winControls = $('winControls');
+  if (winControls && window.electronAPI) {
+    winControls.style.display = 'flex';
+    $('winMin')?.addEventListener('click', () => window.electronAPI.minimize());
+    $('winMax')?.addEventListener('click', () => window.electronAPI.toggleMaximize());
+    $('winClose')?.addEventListener('click', () => window.electronAPI.close());
+  }
 }
+
+/* ── 渲染全部 ─────────────────────────────────────────────── */
+function renderAll() {
+  renderProjectList();
+  renderSkillSelector();
+  renderStats();
+  if (selectedProjectId) renderSelectedProject();
+}
+
+/* ── 初始化 ───────────────────────────────────────────────── */
+function init() {
+  connectWS();
+  loadHealth();
+  loadToolDefinitions();
+  initWinControls();
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      $('reviewPanel').classList.remove('open');
+    }
+  });
+
+  // 设置默认值（从环境变量示例填充占位提示）
+  $('plannerBaseUrl').placeholder = '接口地址（默认 https://api.openai.com/v1）';
+  $('executorBaseUrl').placeholder = '接口地址（默认 https://api.openai.com/v1）';
+  $('plannerCustomModel').placeholder = '模型（默认 gpt-4o）';
+  $('executorCustomModel').placeholder = '模型（默认 gpt-4o-mini）';
+}
+
+// 启动
+init();
+
+// 暴露全局（供 inline onclick 使用）
+window.switchView = switchView;
+window.createProject = createProject;
+window.selectProject = selectProject;
+window.openReview = openReview;
+window.closeReview = closeReview;
+window.switchTab = switchTab;
+window.copyToClipboard = copyToClipboard;
+window.previewInNewWindow = previewInNewWindow;
+window.exportResult = exportResult;
+window.toggleThoughts = toggleThoughts;
+window.toggleFilesPanel = toggleFilesPanel;
+window.toggleToolsPanel = toggleToolsPanel;
+window.triggerFileInput = triggerFileInput;
+window.handleFileSelect = handleFileSelect;
+window.handleInterveneInput = handleInterveneInput;
+window.handleInterveneKey = handleInterveneKey;
+window.sendIntervention = sendIntervention;
+window.stopGeneration = stopGeneration;
+window.retryProject = retryProject;
+window.setProjectWorkDir = setProjectWorkDir;
+window.toggleAlchemyPanel = toggleAlchemyPanel;
+window.runSkillAlchemy = runSkillAlchemy;
+window.selectSkill = selectSkill;
+window.saveSettings = saveSettings;

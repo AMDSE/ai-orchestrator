@@ -9,6 +9,8 @@ import { skillRegistry } from '../skill-registry.js';
 import { createExecutorClient, streamChat } from '../lib/llm.js';
 import { searchWeb, searchImageAssets } from '../services/search_service.js';
 import { getWorkspaceBase } from '../lib/paths.js';
+import { runWithTools } from '../tools/runner.js';
+import { LOCAL_TOOL_DEFINITIONS } from '../tools/local-tools.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -91,15 +93,23 @@ export function buildExecutorPrompt(plan, task, plannerAnswer = null, selectedSk
 
 
 /**
- * 通过外接 API (OpenAI 兼容) 执行任务
+ * 通过外接 API (OpenAI 兼容) 执行任务（支持实时调用本地工具写文件/读文件/列目录/联网搜索）
  */
-async function executeViaExternalApi(taskData, executorConfig, onToken = null, signal = null) {
+async function executeViaExternalApi(taskData, executorConfig, onToken = null, signal = null, onFileWritten = null, workspaceDir = '', onToolCall = null) {
   const { client, model } = createExecutorClient(executorConfig);
   if (!resolveApiKey(executorConfig)) {
     throw new Error('执行脑未配置 API Key，请在 .env 或界面中填写外接 API 凭据');
   }
 
   let prompt = buildExecutorPrompt(taskData.plan, taskData.task, taskData.plannerAnswer, taskData.selectedSkill || 'bili_toy', taskData.framework || '');
+
+  // Agent 模式：注入工作目录中的现有文件作为修改/续写上下文
+  if (taskData.existingFiles && taskData.existingFiles.length > 0) {
+    const filesBlock = taskData.existingFiles
+      .map(f => '--- 📄 ' + f.path + ' ---\n' + f.content)
+      .join('\n\n');
+    prompt += '\n\n【工作目录现有文件（Agent 上下文，如需修改请基于以下内容，文件将直接写入该目录）】\n' + filesBlock;
+  }
 
   // 执行脑联网检索：开启后必须真实访问搜索引擎
   if (taskData.webSearch) {
@@ -116,19 +126,36 @@ async function executeViaExternalApi(taskData, executorConfig, onToken = null, s
   }
 
   console.log(`🌐 执行脑 (较低性能模型) 通过外接 API: BaseURL=${executorConfig.baseUrl || process.env.EXECUTOR_BASE_URL || '(env)'}, Model=${model}`);
+  console.log(`[Executor Engine] 🛠️ 本地资源调用能力已启用: 目标目录=${workspaceDir || '(内置 workspace)'}`);
 
-  const rawOutput = await streamChat({
+  const messages = [
+    { role: 'system', content: buildExecutorSystemPrompt(taskData.selectedSkill || 'bili_toy') },
+    { role: 'user', content: prompt }
+  ];
+
+  // 执行脑具备实时调用本地资源能力（write_local_file / read_local_file / list_local_directory / run_local_command / web_search / search_image_assets）
+  const { content: rawOutput } = await runWithTools({
     client,
     model,
-    messages: [
-      { role: 'system', content: buildExecutorSystemPrompt(taskData.selectedSkill || 'bili_toy') },
-      { role: 'user', content: prompt }
-    ],
+    messages,
+    tools: LOCAL_TOOL_DEFINITIONS,
+    toolContext: {
+      workspaceRoot: workspaceDir || path.join(getWorkspaceBase(), taskData.projectId || 'default'),
+      onToolEvent: (action) => {
+        console.log(`[Executor Tool] 📁 ${action.type} ${action.path} (${action.size} 字节)`);
+        if (onFileWritten) onFileWritten(action);
+      }
+    },
     temperature: 0.6,
     signal,
     onChunk: (type, token) => {
       if (type === 'content' && onToken) onToken(token);
     },
+    onToolCall: (toolName, args) => {
+      console.log(`[Executor Tool] 🛠️ 执行脑调用本地工具: ${toolName}`, JSON.stringify(args).slice(0, 200));
+      if (onToolCall) onToolCall(toolName, args);
+    },
+    maxToolCalls: 12
   });
 
   if (rawOutput.includes('[QUESTION_TO_PLANNER]')) {
@@ -146,20 +173,25 @@ function resolveApiKey(config = null) {
 /**
  * 主执行入口：仅支持外接 API（OpenAI 兼容）
  * @param {object} taskData { projectId, task, plan, selectedSkill, plannerAnswer, executorConfig, signal }
+ * @param {object|null} defaultOpenaiClient 保留兼容（未使用）
+ * @param {function|null} onToken 内容流 token 回调
+ * @param {function|null} onFileWritten 文件写入回调
+ * @param {function|null} onToolCall 工具调用记录回调 (toolName, args)=>void
  */
-export async function executeTask(taskData, defaultOpenaiClient = null, onToken = null) {
+export async function executeTask(taskData, defaultOpenaiClient = null, onToken = null, onFileWritten = null, onToolCall = null) {
   const executorConfig = taskData.executorConfig || {};
   const projectId = taskData.projectId || 'default';
 
-  // 创建该项目的专属工作区目录
-  const workspaceDir = path.join(getWorkspaceBase(), projectId);
+  // 目标目录：优先使用用户指定工作目录（Agent 模式），否则使用内部 workspace
+  const workspaceDir = taskData.workDir ? path.resolve(taskData.workDir) : path.join(getWorkspaceBase(), projectId);
   try { fs.mkdirSync(workspaceDir, { recursive: true }); } catch (e) {}
 
-  console.log(`[Executor Engine] 模式: 外接 API | Workspace: ${workspaceDir}`);
-  const result = await executeViaExternalApi(taskData, executorConfig, onToken, taskData.signal);
+  console.log(`[Executor Engine] 模式: 外接 API + 本地工具 | 目标目录: ${workspaceDir}`);
+  const result = await executeViaExternalApi(taskData, executorConfig, onToken, taskData.signal, onFileWritten, workspaceDir, onToolCall);
 
+  // 工具已实时落盘时无需重复解析；仅当模型直接输出代码块时兜底落盘
   if (result.type === 'task_complete' && result.output) {
-    _saveToWorkspace(workspaceDir, result.output);
+    _saveToWorkspace(workspaceDir, result.output, onFileWritten);
   }
   return result;
 }
@@ -192,7 +224,7 @@ function detectFileFromContent(lang, content) {
  * - 支持单个或多个 Markdown 代码块 → 多个实体文件
  * - 无代码块时整段保存为 index.html / 文本文件
  */
-function _saveToWorkspace(workspaceDir, codeText) {
+function _saveToWorkspace(workspaceDir, codeText, onFileWritten = null) {
   try {
     if (!codeText || typeof codeText !== 'string') return;
 
@@ -233,15 +265,17 @@ function _saveToWorkspace(workspaceDir, codeText) {
       files.push({ fileName, content: trimmed });
     }
 
-    // 3. 防御性 HTML 修复 + 落盘
+    // 3. 防御性 HTML 修复 + 落盘（支持子目录，回调 Agent 文件操作）
     for (const f of files) {
       let content = f.content;
       if (f.fileName === 'index.html' && /<!DOCTYPE html>|<html/i.test(content)) {
         content = repairTruncatedHtml(content);
       }
       const filePath = path.join(workspaceDir, f.fileName);
+      try { fs.mkdirSync(path.dirname(filePath), { recursive: true }); } catch {}
       fs.writeFileSync(filePath, content, 'utf-8');
-      console.log(`📁 构建产物已无损落盘至工作区: ${filePath} (${content.length} 字节)`);
+      console.log(`📁 Agent 已写入文件: ${filePath} (${content.length} 字节)`);
+      if (onFileWritten) onFileWritten({ type: 'write', path: f.fileName, size: content.length });
     }
   } catch (e) {
     console.error('保存工作区文件失败:', e.message);

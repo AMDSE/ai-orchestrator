@@ -13,6 +13,7 @@ import 'dotenv/config';
 import { Orchestrator } from './orchestrator.js';
 import { skillRegistry } from './skill-registry.js';
 import { scrapeSourceUrls, alchemizeSkill } from './skill-alchemist.js';
+import { getAvailableLocalTools } from './tools/local-tools.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -74,13 +75,13 @@ skillRegistry._emitter = { emit: (event, data) => {
 
 // 创建新项目
 app.post('/api/projects', async (req, res) => {
-  const { userInput, mode = 'standard', plannerConfig = null, executorConfig = null, maxIterations = 3, selectedSkill = 'bili_toy' } = req.body;
+  const { userInput, mode = 'standard', plannerConfig = null, executorConfig = null, maxIterations = 3, selectedSkill = 'bili_toy', workDir = '' } = req.body;
   if (!userInput?.trim()) {
     return res.status(400).json({ error: '请输入项目想法' });
   }
   const projectId = uuidv4();
   res.json({ projectId, status: 'created' });
-  orchestrator.createProject(projectId, userInput.trim(), mode, plannerConfig, executorConfig, maxIterations, selectedSkill).catch(console.error);
+  orchestrator.createProject(projectId, userInput.trim(), mode, plannerConfig, executorConfig, maxIterations, selectedSkill, workDir).catch(console.error);
 });
 
 // 获取所有项目
@@ -142,6 +143,29 @@ app.post('/api/projects/:id/retry', async (req, res) => {
   try {
     await orchestrator.resumeProject(req.params.id);
     res.json({ success: true, message: '已恢复项目执行' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Agent 工作目录 API ─────────────────────────────────────────────────────
+
+// 设置项目工作目录（Agent 目标文件夹）
+app.post('/api/projects/:id/workdir', async (req, res) => {
+  try {
+    const { workDir = '' } = req.body;
+    const result = orchestrator.setWorkDir(req.params.id, workDir);
+    res.json({ success: true, workDir: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 列出项目工作目录文件（Agent 文件面板）
+app.get('/api/projects/:id/files', async (req, res) => {
+  try {
+    const files = await orchestrator.listWorkDirFiles(req.params.id);
+    res.json({ success: true, files });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -233,8 +257,23 @@ app.get('/api/health', (req, res) => {
     executorModel: process.env.EXECUTOR_MODEL || '未配置 (默认 gpt-4o-mini)',
     activeProjects: orchestrator.activeCount,
     totalProjects: orchestrator.projects.size,
-    skills: skillRegistry.skills.size
+    skills: skillRegistry.skills.size,
+    localTools: getAvailableLocalTools().length
   });
+});
+
+// ── 本地资源工具能力 API（Dashboard 展示双脑可调用的本地能力） ──────────────
+
+// 获取策略脑/执行脑可用的本地资源工具列表
+app.get('/api/tools', (req, res) => {
+  res.json({ success: true, tools: getAvailableLocalTools() });
+});
+
+// 获取项目内双脑实时工具调用历史
+app.get('/api/projects/:id/toolcalls', (req, res) => {
+  const project = orchestrator.getProject(req.params.id);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+  res.json({ success: true, toolCalls: project.toolCalls || [] });
 });
 
 // ── 启动服务器 ────────────────────────────────────────────────────────────────
