@@ -320,7 +320,49 @@ function readExecutorConfig() {
 }
 
 function saveSettings() {
-  toast('配置已保存到本地（新建项目时生效）');
+  // 💾 模型与接口配置持久化到 localStorage（刷新/重启后自动回填）
+  const config = {
+    planner: {
+      baseUrl: $('plannerBaseUrl').value.trim(),
+      apiKey: $('plannerApiKey').value.trim(),
+      model: $('plannerCustomModel').value.trim(),
+      webSearch: $('plannerWebSearchToggle').checked
+    },
+    executor: {
+      baseUrl: $('executorBaseUrl').value.trim(),
+      apiKey: $('executorApiKey').value.trim(),
+      model: $('executorCustomModel').value.trim(),
+      webSearch: $('executorWebSearchToggle').checked
+    },
+    maxIterations: $('maxIterationsInput').value
+  };
+  localStorage.setItem('ai-orchestrator-config', JSON.stringify(config));
+  toast('✅ 配置已保存，下次打开自动回填');
+}
+
+// 从 localStorage 加载保存的配置并回填输入框
+function loadSavedSettings() {
+  try {
+    const raw = localStorage.getItem('ai-orchestrator-config');
+    if (!raw) return;
+    const cfg = JSON.parse(raw);
+    if (cfg.planner) {
+      if (cfg.planner.baseUrl) $('plannerBaseUrl').value = cfg.planner.baseUrl;
+      if (cfg.planner.apiKey) $('plannerApiKey').value = cfg.planner.apiKey;
+      if (cfg.planner.model) $('plannerCustomModel').value = cfg.planner.model;
+      if (typeof cfg.planner.webSearch === 'boolean') $('plannerWebSearchToggle').checked = cfg.planner.webSearch;
+    }
+    if (cfg.executor) {
+      if (cfg.executor.baseUrl) $('executorBaseUrl').value = cfg.executor.baseUrl;
+      if (cfg.executor.apiKey) $('executorApiKey').value = cfg.executor.apiKey;
+      if (cfg.executor.model) $('executorCustomModel').value = cfg.executor.model;
+      if (typeof cfg.executor.webSearch === 'boolean') $('executorWebSearchToggle').checked = cfg.executor.webSearch;
+    }
+    if (cfg.maxIterations) $('maxIterationsInput').value = cfg.maxIterations;
+    console.log('[Settings] ✅ 已从本地恢复已保存的模型配置');
+  } catch (e) {
+    console.warn('[Settings] 读取本地配置失败:', e.message);
+  }
 }
 
 /* ── 技能 ─────────────────────────────────────────────────── */
@@ -385,6 +427,7 @@ function renderProjectList() {
         <div class="pc-meta">
           <span class="pc-status" data-status="${esc(p.status || 'idle')}">${statusLabel(p.status)}</span>
           <span>${p.progress || 0}%</span>
+          <button class="pc-del" onclick="event.stopPropagation(); deleteProject('${p.id}')" title="删除项目">✕</button>
         </div>
       </div>
     `).join('');
@@ -399,6 +442,7 @@ function renderProjectList() {
             <div class="pc-meta">
               <span class="pc-status" data-status="${esc(p.status || 'idle')}">${statusLabel(p.status)}</span>
               <span>${p.progress || 0}%</span>
+              <button class="pc-del" onclick="event.stopPropagation(); deleteProject('${p.id}')" title="删除项目">✕</button>
             </div>
           </div>
         `).join('')
@@ -820,6 +864,29 @@ async function approveProject() {
   }
 }
 
+/* ── 删除项目（项目列表/最近项目） ────────────────────────── */
+async function deleteProject(projectId) {
+  if (!projectId) return;
+  if (!confirm('确定删除项目 ' + projectId.substring(0, 8) + '... 吗？此操作不可撤销。')) return;
+  try {
+    const r = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+    if (!r.ok) {
+      const err = await r.json();
+      throw new Error(err.error || '删除失败');
+    }
+    projects.delete(projectId);
+    if (selectedProjectId === projectId) {
+      selectedProjectId = null;
+      $('messageArea').style.display = 'none';
+      $('noSelection').style.display = 'flex';
+    }
+    renderAll();
+    toast('🗑 项目已删除');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
 /* ── Plan/Act：切换项目 Agent 模式 ────────────────────────── */
 async function changeProjectAgentMode(mode) {
   if (!selectedProjectId) return;
@@ -1039,6 +1106,7 @@ function init() {
   connectWS();
   loadHealth();
   loadToolDefinitions();
+  loadSavedSettings(); // 💾 恢复已保存的模型配置
   initWinControls();
 
   document.addEventListener('keydown', (e) => {
@@ -1078,6 +1146,7 @@ window.sendIntervention = sendIntervention;
 window.stopGeneration = stopGeneration;
 window.retryProject = retryProject;
 window.approveProject = approveProject;
+window.deleteProject = deleteProject;
 window.changeProjectAgentMode = changeProjectAgentMode;
 window.setProjectWorkDir = setProjectWorkDir;
 window.toggleAlchemyPanel = toggleAlchemyPanel;

@@ -376,6 +376,21 @@ html, body {
 .project-card.active { border-color: var(--accent-blue); background: rgba(79,140,255,.1); }
 .pc-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pc-meta { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-2); }
+.pc-del {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--text-2);
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .15s;
+  flex-shrink: 0;
+}
+.pc-del:hover { background: rgba(239,68,68,.25); color: var(--accent-red); }
 .pc-status { font-size: 10px; padding: 2px 8px; border-radius: 12px; font-weight: 600; }
 .pc-status[data-status="completed"] { background: rgba(45,212,167,.15); color: var(--accent-green); }
 .pc-status[data-status="planning"], .pc-status[data-status="executing"], .pc-status[data-status="waiting_answer"], .pc-status[data-status="queued"] { background: rgba(79,140,255,.15); color: var(--accent-blue); }
