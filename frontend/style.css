@@ -297,7 +297,7 @@ html, body {
 }
 .hero-form-row input[type="text"]:focus { border-color: rgba(79,140,255,.5); }
 
-.hero-launch { align-items: flex-end; }
+.hero-launch { align-items: flex-end; flex-wrap: wrap; }
 .hero-launch > div { display: flex; flex-direction: column; gap: 5px; }
 .mini-field-label { font-size: 10px; color: var(--text-2); text-transform: uppercase; letter-spacing: .6px; }
 .hero-launch select, .hero-launch input[type="number"] {
@@ -306,11 +306,14 @@ html, body {
   border-radius: var(--radius-sm);
   color: var(--text-0);
   font-size: 13px;
-  padding: 9px 10px;
+  padding: 9px 8px;
   outline: none;
-  min-width: 100px;
+  min-width: 84px;
 }
-.launch-skill select { min-width: 160px; }
+.launch-skill select { min-width: 124px; }
+
+/* 启动编排按钮：强制单行显示，防止文本溢出 */
+.btn-launch { white-space: nowrap; flex-shrink: 0; }
 
 .btn-launch {
   display: inline-flex; align-items: center; gap: 8px;
