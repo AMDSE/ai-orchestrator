@@ -102,6 +102,13 @@
                     <option value="creative">创意</option>
                   </select>
                 </div>
+                <div class="launch-mode">
+                  <label class="mini-field-label">Agent 模式</label>
+                  <select id="launchAgentModeSelect" title="Plan 模式：只规划不执行，批准后才落地；Act 模式：规划后自动执行">
+                    <option value="act">⚡ Act（直接执行）</option>
+                    <option value="plan">📋 Plan（先规划再批准）</option>
+                  </select>
+                </div>
                 <div class="launch-iter">
                   <label class="mini-field-label">迭代轮数</label>
                   <input type="number" id="launchIterInput" value="3" min="1" max="10" />
@@ -204,6 +211,7 @@
                   <span class="brain-state" id="executorStatus">待命</span>
                 </div>
                 <div class="brain-actions">
+                  <button class="btn-approve" id="approveBtn" onclick="approveProject()" style="display:none">✅ 批准并执行</button>
                   <button class="btn-stop" id="stopBtn" onclick="stopGeneration()" style="display:none">⏹ 中止</button>
                   <button class="btn-retry" id="retryBtn" onclick="retryProject()" style="display:none">↻ 重试</button>
                   <button class="btn-ghost" onclick="setProjectWorkDir()" title="设置工作目录">📂 目录</button>
@@ -331,9 +339,9 @@
                 </label>
               </div>
               <div class="rg-fields">
-                <input type="text" id="plannerBaseUrl" placeholder="接口地址 Base URL" />
+                <input type="text" id="plannerBaseUrl" placeholder="接口地址 Base URL（如 https://api.openai.com/v1）" />
                 <input type="password" id="plannerApiKey" placeholder="API Key" />
-                <input type="text" id="plannerCustomModel" placeholder="模型（高性能，如 gpt-4o）" />
+                <input type="text" id="plannerCustomModel" placeholder="模型名（请填写你的模型 ID，如 qwen-max / deepseek-chat / gpt-4o）" />
               </div>
             </div>
             <div class="rg-block">
@@ -345,9 +353,9 @@
                 </label>
               </div>
               <div class="rg-fields">
-                <input type="text" id="executorBaseUrl" placeholder="接口地址 Base URL" />
+                <input type="text" id="executorBaseUrl" placeholder="接口地址 Base URL（如 https://api.openai.com/v1）" />
                 <input type="password" id="executorApiKey" placeholder="API Key" />
-                <input type="text" id="executorCustomModel" placeholder="模型（低性能，如 gpt-4o-mini）" />
+                <input type="text" id="executorCustomModel" placeholder="模型名（请填写你的模型 ID，可与策略脑相同）" />
               </div>
             </div>
             <div class="rg-block">

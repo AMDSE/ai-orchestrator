@@ -19,6 +19,7 @@ const projectsFilePath = path.join(userdataDir, 'projects.json');
 export const ProjectStatus = {
   IDLE: 'idle',
   PLANNING: 'planning',       // 策略脑规划中
+  AWAITING_APPROVAL: 'awaiting_approval', // 📋 Plan 模式：策略脑规划完成，等待用户批准
   EXECUTING: 'executing',     // 执行脑执行中
   WAITING_ANSWER: 'waiting_answer', // 等待策略脑回答
   COMPLETED: 'completed',     // 项目完成
@@ -56,7 +57,7 @@ export class Orchestrator extends EventEmitter {
         const list = JSON.parse(raw);
         if (Array.isArray(list)) {
           for (const p of list) {
-            if (['planning', 'executing', 'waiting_answer'].includes(p.status)) {
+            if (['planning', 'executing', 'waiting_answer', 'awaiting_approval'].includes(p.status)) {
               p.status = ProjectStatus.STOPPED;
             }
             this.projects.set(p.id, p);
@@ -132,11 +133,13 @@ export class Orchestrator extends EventEmitter {
     return this.projects.get(projectId);
   }
 
-  async createProject(projectId, userInput, mode = 'standard', plannerConfig = null, executorConfig = null, maxIterations = 3, selectedSkill = 'bili_toy', workDir = '') {
+  async createProject(projectId, userInput, mode = 'standard', agentMode = 'act', plannerConfig = null, executorConfig = null, maxIterations = 3, selectedSkill = 'bili_toy', workDir = '') {
     const project = {
       id: projectId,
       userInput,
       mode,
+      agentMode: agentMode === 'plan' ? 'plan' : 'act', // 🔀 Plan/Act 模式（默认 act）
+      planStep: 0, // Plan 模式下的步骤推进（0=等待批准规划，1=已批准执行中）
       selectedSkill: selectedSkill || 'bili_toy', // 🎯 选中的项目技能 (如 bili_toy)
       status: ProjectStatus.IDLE,
       plan: null,
@@ -164,6 +167,9 @@ export class Orchestrator extends EventEmitter {
       ? path.resolve(workDir)
       : path.join(getWorkspaceBase(), projectId);
     this.planner.setProjectWorkspace(projectId, resolvedWorkspace);
+
+    // Plan 模式：策略脑仅使用只读工具（类似 Cline 的 Plan 模式约束）
+    this.planner.setPlanMode(projectId, project.agentMode === 'plan');
 
     this._emit(projectId, 'project_created', { project });
 
@@ -224,15 +230,29 @@ export class Orchestrator extends EventEmitter {
       project.framework = planResult.framework || '';
       project.progress = 10;
 
+      const approvalMsg = (project.agentMode === 'plan')
+        ? `\n\n📋 **【Plan 模式】规划已完成，等待你审批！** 请点击「✅ 批准并执行」开始落地，或输入介入意见调整方案。`
+        : `\n\n【信号通知】策略脑已完成初版规划，发出【PLAN_READY】信号！系统将自动拉起【执行脑 (外接 API)】去完成剩余任务。`;
+
       this._addMessage(projectId, 'planner',
         `📋 **第 ${project.iteration} 轮策略规划完成**：${planResult.title || '项目'}\n` +
         `📝 ${planResult.summary || ''}\n\n` +
         `📌 **任务列表** (共${project.tasks.length}个)：\n` +
         project.tasks.map(t => `  ${t.id}. ${t.title}`).join('\n') +
         (project.framework ? `\n\n🏗️ **策略脑已亲自完成整体框架与高难度部分**，执行脑将基于 framework 继续构建剩余任务` : '') +
-        `\n\n【信号通知】策略脑已完成初版规划，发出【PLAN_READY】信号！系统将自动拉起【执行脑 (外接 API)】去完成剩余任务。`
+        approvalMsg
       );
-      this._emit(projectId, 'plan_ready', { plan: planResult, iteration: project.iteration });
+      this._emit(projectId, 'plan_ready', { plan: planResult, iteration: project.iteration, agentMode: project.agentMode });
+
+      // === Plan 模式：规划完成后停靠，等待用户批准 ===
+      if (project.agentMode === 'plan') {
+        project.status = ProjectStatus.AWAITING_APPROVAL;
+        project.planStep = 0;
+        this.abortControllers.delete(projectId); // 释放中断控制器（无生成进行中）
+        this._emit(projectId, 'status_change', { status: ProjectStatus.AWAITING_APPROVAL, planStep: 0 });
+        this._addMessage(projectId, 'system', '⏸️ **Agent 处于 Plan 模式，已暂停在规划阶段。** 批准后可开始执行。');
+        return; // 停靠在等待批准，不进入执行阶段
+      }
 
       // === Phase 2: 执行脑逐任务执行 + 多轮迭代循环 ===
       await this._executeTasksAndIterate(projectId, 0);
@@ -309,6 +329,53 @@ export class Orchestrator extends EventEmitter {
       }
     } else {
       await this._startProject(projectId);
+    }
+  }
+
+  /**
+   * 💡 Plan 模式：用户批准策略脑规划后，开始执行
+   * 角色类似 Cline 的 Plan→Act 切换：规划已完成并展示给用户，批准后 Agent 进入执行态
+   */
+  async approveProject(projectId) {
+    const project = this.projects.get(projectId);
+    if (!project) throw new Error('项目不存在');
+    if (project.status !== ProjectStatus.AWAITING_APPROVAL) {
+      throw new Error('当前项目不在等待批准状态（仅 Plan 模式项目可批准）');
+    }
+    if (!project.plan || !project.tasks || project.tasks.length === 0) {
+      throw new Error('尚无可用规划，无法批准执行');
+    }
+
+    // 标记已批准，切换为 Act 执行阶段（解除只读工具限制，Agent 获得全量工具）
+    project.status = ProjectStatus.EXECUTING;
+    project.planStep = 1;
+    this.planner.setPlanMode(projectId, false);
+    this._emit(projectId, 'status_change', { status: ProjectStatus.EXECUTING, planStep: 1 });
+    this._addMessage(projectId, 'system',
+      `✅ **用户已批准规划！** Agent 从 Plan 模式切换到 Act 模式，开始执行 ${project.tasks.length} 个任务...`
+    );
+
+    const abortCtrl = new AbortController();
+    this.abortControllers.set(projectId, abortCtrl);
+    this.activeCount++;
+
+    try {
+      await this._executeTasksAndIterate(projectId, project.currentTaskIndex || 0);
+    } catch (error) {
+      if (error.name === 'AbortError' || project.status === ProjectStatus.STOPPED) {
+        project.status = ProjectStatus.STOPPED;
+        this._addMessage(projectId, 'system', `⏹️ **项目已被用户中止。** 可重新发起介入或查看已有结果。`);
+        this._emit(projectId, 'status_change', { status: ProjectStatus.STOPPED });
+      } else {
+        project.status = ProjectStatus.ERROR;
+        project.error = error.message;
+        this._addMessage(projectId, 'system', `❌ 错误：${error.message}`);
+        this._emit(projectId, 'status_change', { status: ProjectStatus.ERROR, error: error.message });
+      }
+    } finally {
+      this.abortControllers.delete(projectId);
+      this.activeCount--;
+      this._processQueue();
     }
   }
 

@@ -12,9 +12,10 @@ import 'dotenv/config';
 export function resolveStrategyConfig(config = null) {
   return {
     provider: 'custom_api',
-    model: config?.model || process.env.STRATEGY_MODEL || 'gpt-4o',
+    // 模型名不硬编码：必须由用户配置（界面或 STRATEGY_MODEL 环境变量）
+    model: config?.model || process.env.STRATEGY_MODEL || '',
     apiKey: config?.apiKey || process.env.STRATEGY_API_KEY || '',
-    baseUrl: config?.baseUrl || process.env.STRATEGY_BASE_URL || 'https://api.openai.com/v1',
+    baseUrl: config?.baseUrl || process.env.STRATEGY_BASE_URL || '',
     webSearch: config?.webSearch !== undefined ? config.webSearch : true,
   };
 }
@@ -26,9 +27,10 @@ export function resolveStrategyConfig(config = null) {
 export function resolveExecutorConfig(config = null) {
   return {
     provider: 'custom_api',
-    model: config?.model || process.env.EXECUTOR_MODEL || 'gpt-4o-mini',
+    // 模型名不硬编码：必须由用户配置（界面或 EXECUTOR_MODEL 环境变量）
+    model: config?.model || process.env.EXECUTOR_MODEL || '',
     apiKey: config?.apiKey || process.env.EXECUTOR_API_KEY || '',
-    baseUrl: config?.baseUrl || process.env.EXECUTOR_BASE_URL || 'https://api.openai.com/v1',
+    baseUrl: config?.baseUrl || process.env.EXECUTOR_BASE_URL || '',
     webSearch: config?.webSearch !== undefined ? config.webSearch : false,
   };
 }

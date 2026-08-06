@@ -271,6 +271,7 @@ async function createProject() {
   const payload = {
     userInput,
     mode: $('launchModeSelect').value,
+    agentMode: $('launchAgentModeSelect').value || 'act', // 🔀 Plan/Act 模式
     plannerConfig,
     executorConfig,
     maxIterations: Number($('launchIterInput').value) || 3,
@@ -414,7 +415,8 @@ function firstLine(str) {
 function statusLabel(status) {
   const map = {
     idle: '待命', planning: '策略脑规划中', executing: '执行脑执行中',
-    waiting_answer: '等待回答', completed: '已完成', stopped: '已中止',
+    awaiting_approval: '📋 待批准', waiting_answer: '等待回答',
+    completed: '已完成', stopped: '已中止',
     error: '错误', queued: '排队中'
   };
   return map[status] || status || '—';
@@ -423,7 +425,7 @@ function statusLabel(status) {
 function renderStats() {
   const all = Array.from(projects.values());
   $('statTotal').textContent = all.length;
-  $('statActive').textContent = all.filter((p) => ['planning', 'executing', 'waiting_answer', 'queued'].includes(p.status)).length;
+  $('statActive').textContent = all.filter((p) => ['planning', 'executing', 'waiting_answer', 'queued', 'awaiting_approval'].includes(p.status)).length;
   $('statDone').textContent = all.filter((p) => p.status === 'completed').length;
   $('activeCount').textContent = $('statActive').textContent;
   $('projectCount').textContent = all.length;
@@ -466,6 +468,9 @@ function renderSelectedProject() {
   // 双脑状态卡
   updateBrainStatus(p.status);
 
+  // Plan/Act：批准按钮（awaiting_approval 时显示）
+  $('approveBtn').style.display = p.status === 'awaiting_approval' ? 'inline-block' : 'none';
+
   // 中止/重试按钮
   $('stopBtn').style.display = ['planning', 'executing', 'waiting_answer'].includes(p.status) ? 'inline-block' : 'none';
   $('retryBtn').style.display = ['stopped', 'error'].includes(p.status) ? 'inline-block' : 'none';
@@ -490,6 +495,10 @@ function updateBrainStatus(status) {
     case 'executing':
       planner.textContent = '⏳ 待命';
       executor.textContent = '🟢 执行中';
+      break;
+    case 'awaiting_approval':
+      planner.textContent = '📋 规划完成';
+      executor.textContent = '⏸ 等待批准';
       break;
     case 'waiting_answer':
       planner.textContent = '⏳ 回答中';
@@ -788,6 +797,20 @@ async function retryProject() {
   }
 }
 
+/* ── Plan/Act：批准规划并开始执行 ─────────────────────────── */
+async function approveProject() {
+  if (!selectedProjectId) return;
+  try {
+    const r = await fetch(`/api/projects/${selectedProjectId}/approve`, { method: 'POST' });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || '批准失败');
+    toast('✅ 规划已批准，开始执行');
+    $('approveBtn').style.display = 'none';
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
 /* ── 工作目录 ─────────────────────────────────────────────── */
 async function setProjectWorkDir() {
   if (!selectedProjectId) return;
@@ -990,10 +1013,10 @@ function init() {
   });
 
   // 设置默认值（从环境变量示例填充占位提示）
-  $('plannerBaseUrl').placeholder = '接口地址（默认 https://api.openai.com/v1）';
-  $('executorBaseUrl').placeholder = '接口地址（默认 https://api.openai.com/v1）';
-  $('plannerCustomModel').placeholder = '模型（默认 gpt-4o）';
-  $('executorCustomModel').placeholder = '模型（默认 gpt-4o-mini）';
+  $('plannerBaseUrl').placeholder = '接口地址 Base URL（如 https://api.openai.com/v1）';
+  $('executorBaseUrl').placeholder = '接口地址 Base URL（如 https://api.openai.com/v1）';
+  $('plannerCustomModel').placeholder = '模型名（请填写你的模型 ID）';
+  $('executorCustomModel').placeholder = '模型名（请填写你的模型 ID）';
 }
 
 // 启动
@@ -1019,6 +1042,7 @@ window.handleInterveneKey = handleInterveneKey;
 window.sendIntervention = sendIntervention;
 window.stopGeneration = stopGeneration;
 window.retryProject = retryProject;
+window.approveProject = approveProject;
 window.setProjectWorkDir = setProjectWorkDir;
 window.toggleAlchemyPanel = toggleAlchemyPanel;
 window.runSkillAlchemy = runSkillAlchemy;

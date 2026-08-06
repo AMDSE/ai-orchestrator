@@ -402,6 +402,7 @@ html, body {
 }
 .status-pill { background: rgba(79,140,255,.15); color: var(--accent-blue); border: 1px solid rgba(79,140,255,.3); }
 .status-pill[data-status="completed"] { background: rgba(45,212,167,.15); color: var(--accent-green); border-color: rgba(45,212,167,.3); }
+.status-pill[data-status="awaiting_approval"] { background: rgba(245,166,35,.2); color: var(--accent-amber); border-color: rgba(245,166,35,.5); }
 .status-pill[data-status="stopped"] { background: rgba(245,166,35,.15); color: var(--accent-amber); border-color: rgba(245,166,35,.3); }
 .status-pill[data-status="error"] { background: rgba(239,68,68,.15); color: var(--accent-red); border-color: rgba(239,68,68,.3); }
 .iter-pill { background: rgba(139,92,246,.15); color: var(--accent-violet); border: 1px solid rgba(139,92,246,.3); }
@@ -443,7 +444,7 @@ html, body {
 .brain-state { font-size: 11px; color: var(--text-1); }
 .brain-actions { display: flex; gap: 8px; margin-left: auto; }
 
-.btn-stop, .btn-retry {
+.btn-stop, .btn-retry, .btn-approve {
   border: none; border-radius: var(--radius-sm);
   padding: 9px 16px; font-size: 12px; font-weight: 600;
   cursor: pointer; font-family: var(--font);
@@ -452,7 +453,15 @@ html, body {
 .btn-stop { background: rgba(239,68,68,.2); color: #ff8a8a; border: 1px solid rgba(239,68,68,.4); animation: pulseRed 1.5s infinite; }
 .btn-stop:hover { background: rgba(239,68,68,.35); }
 .btn-retry { background: rgba(245,166,35,.18); color: var(--accent-amber); border: 1px solid rgba(245,166,35,.4); }
+.btn-approve {
+  background: linear-gradient(135deg, rgba(45,212,167,.25), rgba(79,140,255,.25));
+  color: #7ff5d4;
+  border: 1px solid rgba(45,212,167,.5);
+  animation: pulseGreen 1.8s infinite;
+}
+.btn-approve:hover { background: linear-gradient(135deg, rgba(45,212,167,.45), rgba(79,140,255,.45)); color: #fff; }
 @keyframes pulseRed { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,.3); } 50% { box-shadow: 0 0 18px 3px rgba(239,68,68,.35); } }
+@keyframes pulseGreen { 0%,100% { box-shadow: 0 0 0 0 rgba(45,212,167,.3); } 50% { box-shadow: 0 0 18px 3px rgba(45,212,167,.4); } }
 
 /* ── Agent 工具栏 ── */
 .agent-bar { display: flex; gap: 8px; align-items: center; }

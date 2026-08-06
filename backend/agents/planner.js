@@ -81,6 +81,29 @@ export class PlannerAgent {
     this.conversationHistory = new Map();
     this.projectWorkspaces = new Map(); // projectId -> 项目工作区绝对路径（用于工具调用边界）
     this.toolCallback = null; // 工具调用记录回调（由 orchestrator 注入）
+    this.planModeProjects = new Map(); // projectId -> 是否 Plan 模式（只读工具）
+  }
+
+  /**
+   * 标记项目是否为 Plan 模式（只读：仅读文件/列目录/搜索，禁写文件/执行命令）
+   */
+  setPlanMode(projectId, isPlan) {
+    if (isPlan) this.planModeProjects.set(projectId, true);
+    else this.planModeProjects.delete(projectId);
+  }
+
+  /**
+   * 获取项目可用工具列表：
+   * - Plan 模式：只读工具（read/list/web_search/search_assets）
+   * - Act 模式：全部工具（含 write_local_file / run_local_command）
+   */
+  _getToolsForProject(projectId) {
+    if (this.planModeProjects.has(projectId)) {
+      return LOCAL_TOOL_DEFINITIONS.filter((t) => [
+        'read_local_file', 'list_local_directory', 'web_search', 'search_image_assets'
+      ].includes(t.function.name));
+    }
+    return LOCAL_TOOL_DEFINITIONS;
   }
 
   /**
@@ -156,7 +179,7 @@ export class PlannerAgent {
       client,
       model,
       messages: history,
-      tools: LOCAL_TOOL_DEFINITIONS,
+      tools: this._getToolsForProject(projectId),
       toolContext: {
         workspaceRoot,
         onToolEvent: null
@@ -281,5 +304,6 @@ ${outputsText}
 
   clearHistory(projectId) {
     this.conversationHistory.delete(projectId);
+    this.planModeProjects.delete(projectId);
   }
 }

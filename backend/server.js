@@ -75,13 +75,13 @@ skillRegistry._emitter = { emit: (event, data) => {
 
 // 创建新项目
 app.post('/api/projects', async (req, res) => {
-  const { userInput, mode = 'standard', plannerConfig = null, executorConfig = null, maxIterations = 3, selectedSkill = 'bili_toy', workDir = '' } = req.body;
+  const { userInput, mode = 'standard', agentMode = 'act', plannerConfig = null, executorConfig = null, maxIterations = 3, selectedSkill = 'bili_toy', workDir = '' } = req.body;
   if (!userInput?.trim()) {
     return res.status(400).json({ error: '请输入项目想法' });
   }
   const projectId = uuidv4();
   res.json({ projectId, status: 'created' });
-  orchestrator.createProject(projectId, userInput.trim(), mode, plannerConfig, executorConfig, maxIterations, selectedSkill, workDir).catch(console.error);
+  orchestrator.createProject(projectId, userInput.trim(), mode, agentMode, plannerConfig, executorConfig, maxIterations, selectedSkill, workDir).catch(console.error);
 });
 
 // 获取所有项目
@@ -143,6 +143,16 @@ app.post('/api/projects/:id/retry', async (req, res) => {
   try {
     await orchestrator.resumeProject(req.params.id);
     res.json({ success: true, message: '已恢复项目执行' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Plan/Act 模式：批准策略脑规划（Plan 模式下的用户确认点） ─────────────
+app.post('/api/projects/:id/approve', async (req, res) => {
+  try {
+    await orchestrator.approveProject(req.params.id);
+    res.json({ success: true, message: '规划已批准，开始执行' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -253,8 +263,8 @@ app.post('/api/skill-alchemy/run', async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    strategyModel: process.env.STRATEGY_MODEL || '未配置 (默认 gpt-4o)',
-    executorModel: process.env.EXECUTOR_MODEL || '未配置 (默认 gpt-4o-mini)',
+    strategyModel: process.env.STRATEGY_MODEL || '未配置',
+    executorModel: process.env.EXECUTOR_MODEL || '未配置',
     activeProjects: orchestrator.activeCount,
     totalProjects: orchestrator.projects.size,
     skills: skillRegistry.skills.size,
