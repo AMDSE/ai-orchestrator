@@ -158,6 +158,20 @@ app.post('/api/projects/:id/approve', async (req, res) => {
   }
 });
 
+// ── Plan/Act 模式：切换项目 Agent 模式（仅未运行/未运行的待建项目） ─────
+app.post('/api/projects/:id/agentmode', (req, res) => {
+  try {
+    const { agentMode } = req.body;
+    if (!['plan', 'act'].includes(agentMode)) {
+      return res.status(400).json({ error: 'agentMode 必须是 plan 或 act' });
+    }
+    const result = orchestrator.changeAgentMode(req.params.id, agentMode);
+    res.json({ success: true, agentMode: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Agent 工作目录 API ─────────────────────────────────────────────────────
 
 // 设置项目工作目录（Agent 目标文件夹）

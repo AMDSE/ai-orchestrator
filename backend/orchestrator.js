@@ -379,6 +379,32 @@ export class Orchestrator extends EventEmitter {
     }
   }
 
+  /**
+   * 🔀 切换项目 Agent 模式（仅允许在未运行/待命/完成/中止/错误状态切换）
+   * Plan = 只规划不执行（规划后停在等待批准）；Act = 规划后直接执行
+   */
+  changeAgentMode(projectId, agentMode) {
+    const project = this.projects.get(projectId);
+    if (!project) throw new Error('项目不存在');
+
+    if (['planning', 'executing', 'waiting_answer', 'queued', 'awaiting_approval'].includes(project.status)) {
+      throw new Error('Agent 运行中或等待批准，不可切换模式');
+    }
+
+    project.agentMode = agentMode === 'plan' ? 'plan' : 'act';
+    project.planStep = 0;
+    this.planner.setPlanMode(projectId, project.agentMode === 'plan');
+    this._addMessage(projectId, 'system',
+      `🔀 **Agent 模式已切换为：** ${project.agentMode === 'plan' ? '📋 Plan（先规划再批准执行）' : '⚡ Act（规划后直接执行）'}`
+    );
+    this._emit(projectId, 'config_change', {
+      agentMode: project.agentMode,
+      planStep: project.planStep
+    });
+    this._saveProjectsToDisk();
+    return project.agentMode;
+  }
+
   async _executeTasksAndIterate(projectId, startIndex = 0) {
     const project = this.projects.get(projectId);
     if (!project || !project.tasks.length) return;

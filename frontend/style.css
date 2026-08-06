@@ -393,8 +393,26 @@ html, body {
 .proj-empty h3 { font-size: 18px; }
 .proj-empty p { color: var(--text-1); max-width: 380px; line-height: 1.7; font-size: 13px; }
 
-/* ── 项目工作区 ── */
-.workspace { display: flex; flex-direction: column; gap: 14px; }
+/* ── 项目工作区（固定头部 + 滚动中部 + 固定介入栏） ── */
+.workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: calc(100vh - 104px);
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 中部可滚动区：双面板 + 思考流 + 消息流独立滚动，头部/介入栏固定 */
+.ws-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 4px;
+}
 .ws-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .ws-title-box h1 { font-size: 20px; font-weight: 800; margin-bottom: 6px; word-break: break-all; }
 .ws-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -525,6 +543,30 @@ html, body {
 .tool-name { font-family: var(--mono); color: var(--text-0); font-size: 11.5px; }
 .tool-args { color: var(--text-2); font-size: 11px; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 
+/* 项目栏 Agent 模式切换器 */
+.agent-mode-ctl {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+}
+.agent-mode-ctl .am-label {
+  font-size: 11px;
+  color: var(--text-1);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.agent-mode-ctl select {
+  background: rgba(0,0,0,.3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-0);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 8px;
+  outline: none;
+  cursor: pointer;
+}
+.agent-mode-ctl select:focus { border-color: rgba(45,212,167,.5); }
+
 /* ── 思考流 ── */
 .proc { overflow: hidden; }
 .proc-head {
@@ -541,7 +583,6 @@ html, body {
 .proc-head:hover { color: var(--text-0); }
 .proc-caret { transition: transform .2s; }
 .proc-body {
-  max-height: 220px; overflow-y: auto;
   padding: 0 16px 14px;
   display: flex; flex-direction: column; gap: 6px;
 }

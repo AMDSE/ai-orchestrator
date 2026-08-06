@@ -270,8 +270,8 @@ async function createProject() {
 
   const payload = {
     userInput,
-    mode: $('launchModeSelect').value,
-    agentMode: $('launchAgentModeSelect').value || 'act', // 🔀 Plan/Act 模式
+    mode: 'standard', // 标准化模式（创意/标准选择已移除）
+    agentMode: 'act', // 🔀 默认 Act 快速模式（可在项目栏切换 Plan/Act）
     plannerConfig,
     executorConfig,
     maxIterations: Number($('launchIterInput').value) || 3,
@@ -467,6 +467,15 @@ function renderSelectedProject() {
 
   // 双脑状态卡
   updateBrainStatus(p.status);
+
+  // Agent 模式选择器（项目栏）：同步当前值；运行/待批准中禁用切换
+  const amSel = $('projAgentModeSelect');
+  if (amSel) {
+    amSel.value = p.agentMode || 'act';
+    const locked = ['planning', 'executing', 'waiting_answer', 'queued', 'awaiting_approval'].includes(p.status);
+    amSel.disabled = locked;
+    amSel.title = locked ? 'Agent 运行中/待批准，不可切换' : 'Plan：只规划不执行（批准后落地）；Act：规划后直接执行';
+  }
 
   // Plan/Act：批准按钮（awaiting_approval 时显示）
   $('approveBtn').style.display = p.status === 'awaiting_approval' ? 'inline-block' : 'none';
@@ -811,6 +820,32 @@ async function approveProject() {
   }
 }
 
+/* ── Plan/Act：切换项目 Agent 模式 ────────────────────────── */
+async function changeProjectAgentMode(mode) {
+  if (!selectedProjectId) return;
+  const p = projects.get(selectedProjectId);
+  if (p && ['planning', 'executing', 'waiting_answer', 'queued', 'awaiting_approval'].includes(p.status)) {
+    toast('Agent 运行中不可切换模式', 'error');
+    if ($('projAgentModeSelect')) $('projAgentModeSelect').value = p.agentMode || 'act';
+    return;
+  }
+  try {
+    const r = await fetch(`/api/projects/${selectedProjectId}/agentmode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentMode: mode })
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || '切换失败');
+    const proj = projects.get(selectedProjectId);
+    if (proj) proj.agentMode = mode;
+    toast(mode === 'plan' ? '📋 已切换为 Plan 模式（下次启动前生效）' : '⚡ 已切换为 Act 模式');
+  } catch (e) {
+    toast(e.message, 'error');
+    if ($('projAgentModeSelect')) $('projAgentModeSelect').value = p?.agentMode || 'act';
+  }
+}
+
 /* ── 工作目录 ─────────────────────────────────────────────── */
 async function setProjectWorkDir() {
   if (!selectedProjectId) return;
@@ -1043,6 +1078,7 @@ window.sendIntervention = sendIntervention;
 window.stopGeneration = stopGeneration;
 window.retryProject = retryProject;
 window.approveProject = approveProject;
+window.changeProjectAgentMode = changeProjectAgentMode;
 window.setProjectWorkDir = setProjectWorkDir;
 window.toggleAlchemyPanel = toggleAlchemyPanel;
 window.runSkillAlchemy = runSkillAlchemy;

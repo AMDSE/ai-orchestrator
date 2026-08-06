@@ -95,20 +95,6 @@
                   <label class="mini-field-label">项目技能</label>
                   <select id="launchSkillSelect"></select>
                 </div>
-                <div class="launch-mode">
-                  <label class="mini-field-label">模式</label>
-                  <select id="launchModeSelect">
-                    <option value="standard">标准</option>
-                    <option value="creative">创意</option>
-                  </select>
-                </div>
-                <div class="launch-mode">
-                  <label class="mini-field-label">Agent 模式</label>
-                  <select id="launchAgentModeSelect" title="Plan 模式：只规划不执行，批准后才落地；Act 模式：规划后自动执行">
-                    <option value="act">⚡ Act（直接执行）</option>
-                    <option value="plan">📋 Plan（先规划再批准）</option>
-                  </select>
-                </div>
                 <div class="launch-iter">
                   <label class="mini-field-label">迭代轮数</label>
                   <input type="number" id="launchIterInput" value="3" min="1" max="10" />
@@ -210,6 +196,13 @@
                   <span class="brain-name">执行脑</span>
                   <span class="brain-state" id="executorStatus">待命</span>
                 </div>
+                <div class="agent-mode-ctl glass-mini" title="Agent 模式：Plan 只规划不执行（批准后才落地）；Act 规划后直接执行。运行中不可切换">
+                  <label class="am-label" for="projAgentModeSelect">Agent 模式</label>
+                  <select id="projAgentModeSelect" onchange="changeProjectAgentMode(this.value)">
+                    <option value="act">⚡ Act</option>
+                    <option value="plan">📋 Plan</option>
+                  </select>
+                </div>
                 <div class="brain-actions">
                   <button class="btn-approve" id="approveBtn" onclick="approveProject()" style="display:none">✅ 批准并执行</button>
                   <button class="btn-stop" id="stopBtn" onclick="stopGeneration()" style="display:none">⏹ 中止</button>
@@ -226,33 +219,37 @@
                 <button class="btn-sub" onclick="toggleToolsPanel()">🛠 工具记录 <span id="toolCountBadge" class="badge">0</span></button>
               </div>
 
-              <div class="dual-panel">
-                <div class="files-panel" id="filesPanel" style="display:none">
-                  <div class="panel-title">工作区文件</div>
-                  <div class="files-list" id="filesList"><div class="empty-state">暂无文件，Agent 实时写入后将出现在这里。</div></div>
+              <!-- 中部可滚动区：双面板 + 思考流 + 消息流 -->
+              <div class="ws-scroll">
+                <!-- 双面板（文件+工具） -->
+                <div class="dual-panel">
+                  <div class="files-panel" id="filesPanel" style="display:none">
+                    <div class="panel-title">工作区文件</div>
+                    <div class="files-list" id="filesList"><div class="empty-state">暂无文件，Agent 实时写入后将出现在这里。</div></div>
+                  </div>
+                  <div class="tools-panel" id="toolsPanel" style="display:none">
+                    <div class="panel-title">双脑本地工具调用</div>
+                    <div class="tools-list" id="toolsList"><div class="empty-state">暂无工具调用，双脑调用本地工具时将实时展示。</div></div>
+                  </div>
                 </div>
-                <div class="tools-panel" id="toolsPanel" style="display:none">
-                  <div class="panel-title">双脑本地工具调用</div>
-                  <div class="tools-list" id="toolsList"><div class="empty-state">暂无工具调用，双脑调用本地工具时将实时展示。</div></div>
+
+                <!-- 思考流（执行过程） -->
+                <div class="proc glass-mini">
+                  <button class="proc-head" onclick="toggleThoughts()">
+                    <span>🧠 思考流 · 策略脑 / 执行脑推理过程</span>
+                    <span class="proc-caret" id="thoughtsToggleIcon">⌄</span>
+                  </button>
+                  <div class="proc-body" id="thoughtsBody">
+                    <div class="proc-empty" id="thoughtPlaceholder">等待双脑输出推理过程…</div>
+                  </div>
                 </div>
+
+                <!-- 消息流 -->
+                <div class="outlog" id="messagesContainer"></div>
+                <div class="stream-panel" id="streamOutput"></div>
               </div>
 
-              <!-- 思考流（执行过程） -->
-              <div class="proc glass-mini">
-                <button class="proc-head" onclick="toggleThoughts()">
-                  <span>🧠 思考流 · 策略脑 / 执行脑推理过程</span>
-                  <span class="proc-caret" id="thoughtsToggleIcon">⌄</span>
-                </button>
-                <div class="proc-body" id="thoughtsBody">
-                  <div class="proc-empty" id="thoughtPlaceholder">等待双脑输出推理过程…</div>
-                </div>
-              </div>
-
-              <!-- 消息流 -->
-              <div class="outlog" id="messagesContainer"></div>
-              <div class="stream-panel" id="streamOutput"></div>
-
-              <!-- 介入栏 -->
+              <!-- 介入栏（固定底部） -->
               <div class="intervene glass-mini">
                 <div class="attach-list" id="attachmentPreview"></div>
                 <div class="at-menu" id="atMenu" style="display:none">
